@@ -10,11 +10,7 @@ export interface GrayImage {
   data: Float32Array;
 }
 
-export function grayscaleFromRGB(
-  rgb: Uint8ClampedArray,
-  width: number,
-  height: number
-): GrayImage {
+export function grayscaleFromRGB(rgb: Uint8ClampedArray, width: number, height: number): GrayImage {
   const data = new Float32Array(width * height);
   for (let i = 0; i < width * height; i++) {
     const r = rgb[i * 3];
@@ -26,11 +22,7 @@ export function grayscaleFromRGB(
 }
 
 /** B&W ordered dither. Returns Uint8 0/255 per pixel. */
-export function orderedBW(
-  img: GrayImage,
-  matrixName = "Bayer 4x4",
-  threshold = 128
-): Uint8Array {
+export function orderedBW(img: GrayImage, matrixName = "Bayer 4x4", threshold = 128): Uint8Array {
   const mat = ORDERED_MATRICES[matrixName] ?? BAYER_4x4;
   const mh = mat.length;
   const mw = mat[0].length;
@@ -67,7 +59,7 @@ export function orderedPalette(
   width: number,
   height: number,
   palette: RGB[],
-  matrixName = "Bayer 4x4"
+  matrixName = "Bayer 4x4",
 ): Uint8ClampedArray {
   const mat = ORDERED_MATRICES[matrixName] ?? BAYER_4x4;
   const mh = mat.length;

@@ -1,0 +1,7 @@
+# Fall back to an nvm-installed node when node isn't on PATH (non-interactive shells)
+if ! command -v npx >/dev/null 2>&1; then
+  for d in "$HOME/.nvm/versions/node/"*/bin; do
+    if [ -x "$d/node" ]; then export PATH="$d:$PATH"; break; fi
+  done
+fi
+npx lint-staged

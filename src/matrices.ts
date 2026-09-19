@@ -40,7 +40,7 @@ export const HALFTONE_4x4: number[][] = [
 ].map((row) => row.map((v) => v * SCALE_17));
 
 export const PATTERN_8x8: number[][] = Array.from({ length: 8 }, (_, i) =>
-  Array.from({ length: 8 }, (__, j) => ((i + j) % 8) * 32.0)
+  Array.from({ length: 8 }, (__, j) => ((i + j) % 8) * 32.0),
 );
 
 export const BLUE_NOISE_8x8: number[][] = [

@@ -11,10 +11,7 @@ describe("matrices", () => {
 
 describe("error diffusion", () => {
   it("Floyd-Steinberg 1x3 [0,128,255] -> [0,0,255] (old > t rule)", () => {
-    const out = floydSteinberg(
-      { width: 3, height: 1, data: new Float32Array([0, 128, 255]) },
-      128
-    );
+    const out = floydSteinberg({ width: 3, height: 1, data: new Float32Array([0, 128, 255]) }, 128);
     assert.deepEqual(Array.from(out), [0, 0, 255]);
   });
 
@@ -45,7 +42,7 @@ describe("ordered", () => {
     const out = orderedBW(
       { width: w, height: h, data: new Float32Array(w * h).fill(128) },
       "Bayer 4x4",
-      128
+      128,
     );
     assert.ok(Array.from(out).every((v: number) => v === 0 || v === 255));
     assert.ok(new Set(out).size === 2);
