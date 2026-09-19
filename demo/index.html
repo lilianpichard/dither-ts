@@ -28,14 +28,17 @@
     <h3>dither-ts</h3>
     <div class="row">
       <input type="file" id="f" accept="image/*" />
-      <select id="m">
-        <option value="ordered">ordered (Bayer 4x4)</option>
-        <option value="floyd">floyd (Floyd-Steinberg)</option>
-        <option value="atkinson">atkinson</option>
-      </select>
+      <select id="m"></select>
+      <label><input type="checkbox" id="c" /> color</label>
+      <select id="p"></select>
       <label
         >threshold <input type="range" id="t" min="1" max="254" value="128" /><span id="tv"
           >128</span
+        ></label
+      >
+      <label
+        >pixel size <input type="range" id="s" min="1" max="8" value="1" /><span id="sv"
+          >1</span
         ></label
       >
       <button id="go" disabled>Process</button>
@@ -49,22 +52,55 @@
       press Process.
     </p>
     <script type="module">
-      import { orderedBW, floydSteinberg, atkinson, grayscaleFromRGB } from "../dist/src/index.js";
+      import {
+        METHOD_NAMES,
+        PALETTES,
+        ditherColor,
+        ditherGray,
+        grayscaleFromRGB,
+      } from "../dist/src/index.js";
       const f = document.getElementById("f");
       const m = document.getElementById("m");
+      const c = document.getElementById("c");
+      const p = document.getElementById("p");
       const t = document.getElementById("t");
       const tv = document.getElementById("tv");
+      const s = document.getElementById("s");
+      const sv = document.getElementById("sv");
       const go = document.getElementById("go");
       const orig = document.getElementById("orig");
       const out = document.getElementById("out");
       const status = document.getElementById("status");
       let bmp = null;
 
+      for (const name of METHOD_NAMES) {
+        const o = document.createElement("option");
+        o.value = o.textContent = name;
+        if (name === "Floyd-Steinberg") o.selected = true;
+        m.appendChild(o);
+      }
+      for (const name of Object.keys(PALETTES)) {
+        const o = document.createElement("option");
+        o.value = o.textContent = name;
+        if (name === "GameBoy") o.selected = true;
+        p.appendChild(o);
+      }
+
       t.oninput = () => {
         tv.textContent = t.value;
         if (bmp) run();
       };
+      s.oninput = () => {
+        sv.textContent = s.value;
+        if (bmp) run();
+      };
       m.onchange = () => {
+        if (bmp) run();
+      };
+      c.onchange = () => {
+        if (bmp) run();
+      };
+      p.onchange = () => {
         if (bmp) run();
       };
       f.onchange = async () => {
@@ -74,7 +110,7 @@
         orig.height = out.height = bmp.height;
         orig.getContext("2d").drawImage(bmp, 0, 0);
         go.disabled = false;
-        status.textContent = "Image loaded. Press Process (or change method/threshold to re-run).";
+        status.textContent = "Image loaded. Press Process (or change a setting to re-run).";
         run();
       };
       go.onclick = run;
@@ -91,23 +127,35 @@
           rgb[i * 3 + 1] = d.data[i * 4 + 1];
           rgb[i * 3 + 2] = d.data[i * 4 + 2];
         }
-        const g = grayscaleFromRGB(rgb, w, h);
         const th = parseInt(t.value, 10);
+        const px = parseInt(s.value, 10);
         const t0 = performance.now();
-        const o =
-          m.value === "floyd"
-            ? floydSteinberg(g, th)
-            : m.value === "atkinson"
-              ? atkinson(g, th)
-              : orderedBW(g, "Bayer 4x4", th);
         const octx = out.getContext("2d");
         const od = octx.createImageData(w, h);
-        for (let i = 0; i < o.length; i++) {
-          od.data[i * 4] = od.data[i * 4 + 1] = od.data[i * 4 + 2] = o[i];
-          od.data[i * 4 + 3] = 255;
+        if (c.checked) {
+          const o = ditherColor(rgb, w, h, {
+            method: m.value,
+            palette: p.value,
+            pixelSize: px,
+          });
+          for (let i = 0; i < w * h; i++) {
+            od.data[i * 4] = o[i * 3];
+            od.data[i * 4 + 1] = o[i * 3 + 1];
+            od.data[i * 4 + 2] = o[i * 3 + 2];
+            od.data[i * 4 + 3] = 255;
+          }
+        } else {
+          const g = grayscaleFromRGB(rgb, w, h);
+          const o = ditherGray(g, { method: m.value, threshold: th, pixelSize: px });
+          for (let i = 0; i < o.length; i++) {
+            od.data[i * 4] = od.data[i * 4 + 1] = od.data[i * 4 + 2] = o[i];
+            od.data[i * 4 + 3] = 255;
+          }
         }
         octx.putImageData(od, 0, 0);
-        status.textContent = `Done: ${m.value} th=${th} in ${(performance.now() - t0).toFixed(1)}ms`;
+        status.textContent =
+          `Done: ${m.value} ${c.checked ? `color/${p.value}` : `bw th=${th}`} px=${px} ` +
+          `in ${(performance.now() - t0).toFixed(1)}ms`;
       }
     </script>
   </body>
