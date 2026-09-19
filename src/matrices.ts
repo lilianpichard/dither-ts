@@ -76,16 +76,102 @@ export const ORDERED_MATRICES: Record<string, number[][]> = {
   Pattern: PATTERN_8x8,
 };
 
-/** Tile a small matrix to h x w (mirrors numpy tile in matrices.py). */
+/** Tile a small matrix to h x w. */
 export function tileMatrix(matrix: number[][], h: number, w: number): number[][] {
   const mh = matrix.length;
   const mw = matrix[0].length;
-  const out: number[][] = new Array(h);
-  for (let y = 0; y < h; y++) {
-    const row = new Array(w);
+  return Array.from({ length: h }, (_, y) => {
     const src = matrix[y % mh];
-    for (let x = 0; x < w; x++) row[x] = src[x % mw];
-    out[y] = row;
+    return Array.from({ length: w }, (__, x) => src[x % mw]);
+  });
+}
+
+/** Class matrix for dot-diffusion, tiled to h x w. */
+export const DOT_CLASS: number[][] = [
+  [0, 2, 4, 6],
+  [1, 3, 5, 7],
+  [0, 2, 4, 6],
+  [1, 3, 5, 7],
+];
+
+/** Procedural crosshatch field (0..255) for w*h. */
+export function crosshatchField(w: number, h: number): number[][] {
+  return Array.from({ length: h }, (_, y) =>
+    Array.from({ length: w }, (__, x) => (Math.sin(x * 0.5) + Math.sin(y * 0.5)) * 64 + 128),
+  );
+}
+
+/** Deterministic 32-bit PRNG (mulberry32). */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const MASK_SIZE = 64;
+const MASK_SEED = 0xd1740;
+let maskCache: number[][] | null = null;
+
+function gaussianKernel1D(sigma: number): number[] {
+  const radius = Math.max(1, Math.ceil(sigma * 3));
+  const kernel: number[] = [];
+  let sum = 0;
+  for (let i = -radius; i <= radius; i++) {
+    const v = Math.exp(-(i * i) / (2 * sigma * sigma));
+    kernel.push(v);
+    sum += v;
+  }
+  return kernel.map((v) => v / sum);
+}
+
+function blurSeparable(src: number[][], sigma: number): number[][] {
+  const h = src.length;
+  const w = src[0].length;
+  const k = gaussianKernel1D(sigma);
+  const r = (k.length - 1) / 2;
+  const tmp: number[][] = Array.from({ length: h }, () => Array.from({ length: w }, () => 0));
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let acc = 0;
+      for (let i = 0; i < k.length; i++) {
+        acc += src[y][(x + i - r + w) % w] * k[i];
+      }
+      tmp[y][x] = acc;
+    }
+  }
+  const out: number[][] = Array.from({ length: h }, () => Array.from({ length: w }, () => 0));
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let acc = 0;
+      for (let i = 0; i < k.length; i++) {
+        acc += tmp[(y + i - r + h) % h][x] * k[i];
+      }
+      out[y][x] = acc;
+    }
   }
   return out;
+}
+
+/**
+ * Deterministic high-frequency threshold mask, tiled to h x w.
+ * Built once from a seeded uniform field minus its low frequencies,
+ * recentered on 128. Values stay in 0..255.
+ */
+export function blueNoiseMask(h: number, w: number): number[][] {
+  if (!maskCache) {
+    const rand = mulberry32(MASK_SEED);
+    const base: number[][] = Array.from({ length: MASK_SIZE }, () =>
+      Array.from({ length: MASK_SIZE }, () => Math.floor(rand() * 256)),
+    );
+    const low = blurSeparable(base, 4);
+    maskCache = base.map((row, y) =>
+      row.map((v, x) => Math.min(255, Math.max(0, v - low[y][x] + 128))),
+    );
+  }
+  return tileMatrix(maskCache, h, w);
 }

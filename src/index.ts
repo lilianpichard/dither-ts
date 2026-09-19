@@ -1,3 +1,8 @@
+export * from "./types.js";
 export * from "./matrices.js";
 export * from "./palettes.js";
-export * from "./kernels.js";
+export * from "./color.js";
+export * from "./diffusion.js";
+export * from "./ordered.js";
+export * from "./pipeline.js";
+export { grayscaleFromRGB, floydSteinberg, atkinson } from "./kernels.js";

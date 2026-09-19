@@ -1,7 +1,17 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { BAYER_4x4 } from "../src/matrices.js";
-import { floydSteinberg, atkinson, orderedBW } from "../src/kernels.js";
+import { floydSteinberg, atkinson } from "../src/kernels.js";
+import { diffuseBW } from "../src/diffusion.js";
+import { orderedBW } from "../src/ordered.js";
+
+function gray(values: number[], w: number, h: number) {
+  return { width: w, height: h, data: new Float32Array(values) };
+}
+
+function fill(n: number, v: number): number[] {
+  return Array.from({ length: n }, () => v);
+}
 
 describe("matrices", () => {
   it("Bayer 4x4 top row", () => {
@@ -11,7 +21,7 @@ describe("matrices", () => {
 
 describe("error diffusion", () => {
   it("Floyd-Steinberg 1x3 [0,128,255] -> [0,0,255] (old > t rule)", () => {
-    const out = floydSteinberg({ width: 3, height: 1, data: new Float32Array([0, 128, 255]) }, 128);
+    const out = floydSteinberg(gray([0, 128, 255], 3, 1), 128);
     assert.deepEqual(Array.from(out), [0, 0, 255]);
   });
 
@@ -39,12 +49,23 @@ describe("ordered", () => {
   it("outputs binary, varies across pixels on flat gray", () => {
     const w = 4;
     const h = 4;
-    const out = orderedBW(
-      { width: w, height: h, data: new Float32Array(w * h).fill(128) },
-      "Bayer 4x4",
-      128,
-    );
+    const out = orderedBW(gray(fill(w * h, 128), w, h), "Bayer 4x4", 128);
     assert.ok(Array.from(out).every((v: number) => v === 0 || v === 255));
     assert.ok(new Set(out).size === 2);
+  });
+});
+
+describe("compat wrappers", () => {
+  it("floydSteinberg delegates to the table engine", () => {
+    const img = gray([10, 200, 130, 90, 250, 5], 3, 2);
+    assert.deepEqual(
+      Array.from(floydSteinberg(img, 128)),
+      Array.from(diffuseBW(img, "Floyd-Steinberg", 128)),
+    );
+  });
+
+  it("atkinson delegates to the table engine", () => {
+    const img = gray([10, 200, 130, 90, 250, 5], 3, 2);
+    assert.deepEqual(Array.from(atkinson(img, 128)), Array.from(diffuseBW(img, "Atkinson", 128)));
   });
 });
