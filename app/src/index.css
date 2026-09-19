@@ -1,0 +1,25 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 16px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+canvas {
+  border: 1px solid #888;
+  max-width: 48%;
+}
+
+#status {
+  opacity: 0.7;
+}
