@@ -1,4 +1,5 @@
 import { ditherColor, ditherGray, grayscaleFromRGB } from "../../../src/index.js";
+import type { RGB } from "../../../src/index.js";
 
 export interface RenderRequest {
   id: number;
@@ -9,7 +10,7 @@ export interface RenderRequest {
   color: boolean;
   method: string;
   threshold: number;
-  palette: string;
+  palette: string | RGB[];
   pixelSize: number;
 }
 

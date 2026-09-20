@@ -23,4 +23,5 @@ jobs:
       - run: npx oxlint
       - run: npm ci --prefix app
       - run: npm --prefix app run typecheck
+      - run: npm --prefix app test -- --run
       - run: npm --prefix app run build

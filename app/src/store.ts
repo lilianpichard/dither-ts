@@ -1,9 +1,10 @@
 import { create } from "zustand";
+import type { RGB } from "../../src/index.js";
 
 export interface DitherParams {
   method: string;
   threshold: number;
-  palette: string;
+  palette: string | RGB[];
   color: boolean;
   pixelSize: number;
 }

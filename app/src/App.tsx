@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 import { METHOD_NAMES, PALETTES } from "../../src/index.js";
 import { renderImage } from "./worker/client";
 import { useApp } from "./store";
+import PresetsPanel from "./presets/PresetsPanel";
+import BatchPanel from "./batch/BatchPanel";
 
 let jobSeq = 0;
 
@@ -102,12 +104,22 @@ export default function App() {
           color
         </label>
         {params.color && (
-          <select value={params.palette} onChange={(e) => setParams({ palette: e.target.value })}>
+          <select
+            value={typeof params.palette === "string" ? params.palette : "custom"}
+            onChange={(e) => {
+              if (e.target.value !== "custom") setParams({ palette: e.target.value });
+            }}
+          >
             {Object.keys(PALETTES).map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
             ))}
+            {typeof params.palette !== "string" && (
+              <option value="custom" disabled>
+                Custom
+              </option>
+            )}
           </select>
         )}
         {!params.color && (
@@ -148,6 +160,8 @@ export default function App() {
               ? `Done in ${result.ms.toFixed(1)} ms.`
               : "Ready."}
       </p>
+      <PresetsPanel />
+      <BatchPanel />
     </main>
   );
 }
