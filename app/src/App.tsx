@@ -6,6 +6,7 @@ import { useApp } from "./store";
 import PresetsPanel from "./presets/PresetsPanel";
 import BatchPanel from "./batch/BatchPanel";
 import EffectsPanel from "./effects/EffectsPanel";
+import Timeline from "./video/Timeline";
 
 let jobSeq = 0;
 
@@ -65,6 +66,7 @@ export default function App() {
           palette: params.palette,
           pixelSize: params.pixelSize,
           effects: stripKeys(effects),
+          seed: 0,
         },
         [copy],
       );
@@ -167,6 +169,7 @@ export default function App() {
       <PresetsPanel />
       <EffectsPanel />
       <BatchPanel />
+      <Timeline />
     </main>
   );
 }

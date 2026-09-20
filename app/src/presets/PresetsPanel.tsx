@@ -26,6 +26,7 @@ async function renderThumb(preset: Preset): Promise<string> {
           : preset.params.palette.custom,
       pixelSize: Math.max(1, preset.params.pixelSize),
       effects: preset.effects,
+      seed: 0,
     },
     [copy],
   );

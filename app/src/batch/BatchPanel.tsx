@@ -54,6 +54,7 @@ export default function BatchPanel() {
             palette: snapshot.palette,
             pixelSize: snapshot.pixelSize,
             effects: fx,
+            seed: 0,
           },
           [copy],
         );

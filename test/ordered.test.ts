@@ -127,3 +127,42 @@ describe("palette ordered", () => {
     }
   });
 });
+
+describe("temporal seed", () => {
+  function varied(): GrayImage {
+    const w = 8;
+    const h = 8;
+    const data = new Float32Array(w * h);
+    for (let i = 0; i < w * h; i++) data[i] = (i * 37) % 256;
+    return { width: w, height: h, data };
+  }
+
+  it("seed 0 matches the default call", () => {
+    const img = varied();
+    assert.deepEqual(
+      Array.from(orderedBW(img, "Bayer 4x4", 128, 0)),
+      Array.from(orderedBW(img, "Bayer 4x4", 128)),
+    );
+  });
+
+  it("nonzero seeds shift the pattern deterministically", () => {
+    const img = varied();
+    const a = Array.from(orderedBW(img, "Bayer 4x4", 128, 7));
+    const b = Array.from(orderedBW(img, "Bayer 4x4", 128, 7));
+    const c = Array.from(orderedBW(img, "Bayer 4x4", 128, 8));
+    const ref = Array.from(orderedBW(img, "Bayer 4x4", 128, 0));
+    assert.deepEqual(a, b);
+    assert.notDeepEqual(a, ref);
+    assert.notDeepEqual(a, c);
+  });
+
+  it("palette path seeds deterministically too", () => {
+    const rgb = new Uint8ClampedArray(8 * 8 * 3);
+    for (let i = 0; i < rgb.length; i++) rgb[i] = (i * 53) % 256;
+    const a = Array.from(orderedPalette(rgb, 8, 8, PALETTES["GameBoy"], "Bayer 4x4", 3));
+    const b = Array.from(orderedPalette(rgb, 8, 8, PALETTES["GameBoy"], "Bayer 4x4", 3));
+    const ref = Array.from(orderedPalette(rgb, 8, 8, PALETTES["GameBoy"], "Bayer 4x4", 0));
+    assert.deepEqual(a, b);
+    assert.notDeepEqual(a, ref);
+  });
+});

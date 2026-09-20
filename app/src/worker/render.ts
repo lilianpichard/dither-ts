@@ -13,6 +13,8 @@ export interface RenderRequest {
   palette: string | RGB[];
   pixelSize: number;
   effects: EffectInstance[];
+  /** Threshold-field shift for animated ordered variation (0 = still). */
+  seed: number;
 }
 
 export interface RenderResponse {
@@ -26,7 +28,7 @@ export interface RenderResponse {
 
 self.onmessage = (e: MessageEvent<RenderRequest>) => {
   const t0 = performance.now();
-  const { id, width, height, pixels, color, method, threshold, palette, pixelSize, effects } =
+  const { id, width, height, pixels, color, method, threshold, palette, pixelSize, effects, seed } =
     e.data;
   const rgba = new Uint8ClampedArray(pixels);
   const count = width * height;
@@ -38,7 +40,7 @@ self.onmessage = (e: MessageEvent<RenderRequest>) => {
   }
   const out = new Uint8ClampedArray(count * 4);
   if (color) {
-    const o = ditherColor(rgb, width, height, { method, palette, pixelSize });
+    const o = ditherColor(rgb, width, height, { method, palette, pixelSize, seed });
     for (let i = 0; i < count; i++) {
       out[i * 4] = o[i * 3];
       out[i * 4 + 1] = o[i * 3 + 1];
@@ -47,7 +49,7 @@ self.onmessage = (e: MessageEvent<RenderRequest>) => {
     }
   } else {
     const g = grayscaleFromRGB(rgb, width, height);
-    const o = ditherGray(g, { method, threshold, pixelSize });
+    const o = ditherGray(g, { method, threshold, pixelSize, seed });
     for (let i = 0; i < o.length; i++) {
       out[i * 4] = o[i];
       out[i * 4 + 1] = o[i];

@@ -61,4 +61,6 @@ export interface DitherOptions {
   pixelSize?: number;
   /** Preview mode: doubles the effective pixel size. */
   preview?: boolean;
+  /** Threshold-field shift for animated ordered variation (0 = unshifted). */
+  seed?: number;
 }

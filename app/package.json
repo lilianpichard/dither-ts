@@ -13,6 +13,8 @@
   },
   "license": "GPL-3.0-only",
   "dependencies": {
+    "gifenc": "^1.0.3",
+    "mp4-muxer": "^5.2.2",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zustand": "^5.0.15"

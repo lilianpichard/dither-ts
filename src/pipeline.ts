@@ -83,6 +83,7 @@ export function thresholdBW(img: GrayImage, threshold: number): Uint8Array {
 export function ditherGray(img: GrayImage, options: DitherOptions = {}): Uint8Array {
   const method = options.method ?? "Floyd-Steinberg";
   const threshold = options.threshold ?? 128;
+  const seed = options.seed ?? 0;
   const factor = effectivePixelSize(options.pixelSize, options.preview);
   const small = downscaleGray(img, factor);
   let out: Uint8Array;
@@ -92,7 +93,7 @@ export function ditherGray(img: GrayImage, options: DitherOptions = {}): Uint8Ar
       out[i] = Math.min(255, Math.max(0, Math.round(small.data[i])));
     }
   } else if (ORDERED_SET.has(method)) {
-    out = orderedBW(small, method, threshold);
+    out = orderedBW(small, method, threshold, seed);
   } else if (TABLE_SET.has(method)) {
     out = diffuseBW(small, method, threshold);
   } else if (SPECIAL_SET.has(method)) {
@@ -163,13 +164,14 @@ export function ditherColor(
 ): Uint8ClampedArray {
   const method = options.method ?? "Floyd-Steinberg";
   const palette = resolvePalette(options.palette ?? DEFAULT_PALETTE);
+  const seed = options.seed ?? 0;
   const factor = effectivePixelSize(options.pixelSize, options.preview);
   const small = downscaleRGB(rgb, width, height, factor);
   if (method === "None") {
     return upscaleRGB(small.data.slice(), small.w, small.h, width, height);
   }
   const out = ORDERED_SET.has(method)
-    ? orderedPalette(small.data, small.w, small.h, palette, method)
+    ? orderedPalette(small.data, small.w, small.h, palette, method, seed)
     : diffusePalette(small.data, small.w, small.h, palette, method);
   return upscaleRGB(out, small.w, small.h, width, height);
 }
