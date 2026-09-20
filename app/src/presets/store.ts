@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { parsePresetJson, serializePreset, type Preset } from "./schema";
-import type { DitherParams } from "../store";
+import { parsePresetJson, serializePreset, type Preset, type PresetEffect } from "./schema";
+import { useApp, type DitherParams, type StackedEffect } from "../store";
 
 export interface SavedPreset {
   id: string;
@@ -45,7 +45,11 @@ export function presetToParams(preset: Preset): DitherParams {
   };
 }
 
-export function paramsToPreset(name: string, params: DitherParams): Preset {
+export function paramsToPreset(
+  name: string,
+  params: DitherParams,
+  effects: PresetEffect[],
+): Preset {
   return {
     version: 1,
     name,
@@ -56,8 +60,27 @@ export function paramsToPreset(name: string, params: DitherParams): Preset {
       color: params.color,
       pixelSize: params.pixelSize,
     },
-    effects: [],
+    effects: effects.map((e) => ({ type: e.type, params: { ...e.params }, enabled: e.enabled })),
   };
+}
+
+/** Apply a preset to the main store: params plus a freshly-keyed effect stack. */
+export function applyPreset(preset: Preset): void {
+  const { setParams, setEffects } = useApp.getState();
+  setParams(presetToParams(preset));
+  setEffects(
+    preset.effects.map((e) => ({
+      key: uid(),
+      type: e.type,
+      params: { ...e.params },
+      enabled: e.enabled,
+    })),
+  );
+}
+
+/** Strip UI keys for worker/preset payloads. */
+export function stripKeys(effects: StackedEffect[]): PresetEffect[] {
+  return effects.map((e) => ({ type: e.type, params: { ...e.params }, enabled: e.enabled }));
 }
 
 export const usePresets = create<PresetStore>()((set, get) => ({
@@ -88,9 +111,10 @@ export const usePresets = create<PresetStore>()((set, get) => ({
     }
   },
   saveCurrent: (name, params) => {
+    const { effects } = useApp.getState();
     const items = [
       ...get().items,
-      { id: uid(), favorite: false, preset: paramsToPreset(name, params) },
+      { id: uid(), favorite: false, preset: paramsToPreset(name, params, stripKeys(effects)) },
     ];
     persist(items);
     set({ items });

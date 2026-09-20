@@ -1,5 +1,5 @@
-import { ditherColor, ditherGray, grayscaleFromRGB } from "../../../src/index.js";
-import type { RGB } from "../../../src/index.js";
+import { applyEffects, ditherColor, ditherGray, grayscaleFromRGB } from "../../../src/index.js";
+import type { EffectInstance, RGB } from "../../../src/index.js";
 
 export interface RenderRequest {
   id: number;
@@ -12,6 +12,7 @@ export interface RenderRequest {
   threshold: number;
   palette: string | RGB[];
   pixelSize: number;
+  effects: EffectInstance[];
 }
 
 export interface RenderResponse {
@@ -25,7 +26,8 @@ export interface RenderResponse {
 
 self.onmessage = (e: MessageEvent<RenderRequest>) => {
   const t0 = performance.now();
-  const { id, width, height, pixels, color, method, threshold, palette, pixelSize } = e.data;
+  const { id, width, height, pixels, color, method, threshold, palette, pixelSize, effects } =
+    e.data;
   const rgba = new Uint8ClampedArray(pixels);
   const count = width * height;
   const rgb = new Uint8ClampedArray(count * 3);
@@ -53,12 +55,13 @@ self.onmessage = (e: MessageEvent<RenderRequest>) => {
       out[i * 4 + 3] = 255;
     }
   }
+  const final = applyEffects(out, width, height, effects);
   const response: RenderResponse = {
     id,
     width,
     height,
-    pixels: out.buffer as ArrayBuffer,
+    pixels: final.buffer as ArrayBuffer,
     ms: performance.now() - t0,
   };
-  self.postMessage(response, { transfer: [out.buffer as ArrayBuffer] });
+  self.postMessage(response, { transfer: [final.buffer as ArrayBuffer] });
 };

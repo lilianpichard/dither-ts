@@ -5,4 +5,6 @@ export * from "./color.js";
 export * from "./diffusion.js";
 export * from "./ordered.js";
 export * from "./pipeline.js";
+export * from "./effects.js";
+export * from "./prng.js";
 export { grayscaleFromRGB, floydSteinberg, atkinson } from "./kernels.js";

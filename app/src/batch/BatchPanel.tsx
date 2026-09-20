@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { renderImage } from "../worker/client";
+import { stripKeys } from "../presets/store";
 import { useApp } from "../store";
 
 interface BatchItem {
@@ -15,8 +16,11 @@ function outputName(name: string): string {
 
 export default function BatchPanel() {
   const params = useApp((s) => s.params);
+  const effects = useApp((s) => s.effects);
   const paramsRef = useRef(params);
   paramsRef.current = params;
+  const effectsRef = useRef(effects);
+  effectsRef.current = effects;
   const [items, setItems] = useState<BatchItem[]>([]);
   const [running, setRunning] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -24,6 +28,7 @@ export default function BatchPanel() {
   async function run(files: File[]) {
     setRunning(true);
     const snapshot = paramsRef.current;
+    const fx = stripKeys(effectsRef.current);
     const state: BatchItem[] = files.map((f) => ({ name: f.name, status: "queued" as const }));
     setItems(state);
     for (let k = 0; k < files.length; k++) {
@@ -48,6 +53,7 @@ export default function BatchPanel() {
             threshold: snapshot.threshold,
             palette: snapshot.palette,
             pixelSize: snapshot.pixelSize,
+            effects: fx,
           },
           [copy],
         );

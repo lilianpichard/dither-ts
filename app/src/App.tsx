@@ -1,15 +1,18 @@
 import { useEffect, useRef } from "react";
 import { METHOD_NAMES, PALETTES } from "../../src/index.js";
 import { renderImage } from "./worker/client";
+import { stripKeys } from "./presets/store";
 import { useApp } from "./store";
 import PresetsPanel from "./presets/PresetsPanel";
 import BatchPanel from "./batch/BatchPanel";
+import EffectsPanel from "./effects/EffectsPanel";
 
 let jobSeq = 0;
 
 export default function App() {
   const source = useApp((s) => s.source);
   const params = useApp((s) => s.params);
+  const effects = useApp((s) => s.effects);
   const result = useApp((s) => s.result);
   const rendering = useApp((s) => s.rendering);
   const setSource = useApp((s) => s.setSource);
@@ -61,6 +64,7 @@ export default function App() {
           threshold: params.threshold,
           palette: params.palette,
           pixelSize: params.pixelSize,
+          effects: stripKeys(effects),
         },
         [copy],
       );
@@ -68,7 +72,7 @@ export default function App() {
       setResult({ width: res.width, height: res.height, pixels: res.pixels, ms: res.ms, jobId });
     }, 250);
     return () => clearTimeout(timer);
-  }, [source, params, setRendering, setResult]);
+  }, [source, params, effects, setRendering, setResult]);
 
   useEffect(() => {
     if (!result || !outRef.current) return;
@@ -161,6 +165,7 @@ export default function App() {
               : "Ready."}
       </p>
       <PresetsPanel />
+      <EffectsPanel />
       <BatchPanel />
     </main>
   );

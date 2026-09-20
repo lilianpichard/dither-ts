@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { renderImage } from "../worker/client";
 import { useApp } from "../store";
 import { makeSample } from "./sample";
-import { presetToParams, usePresets } from "./store";
+import { applyPreset, usePresets } from "./store";
 import type { Preset } from "./schema";
 
 function thumbKey(id: string, preset: Preset): string {
@@ -25,6 +25,7 @@ async function renderThumb(preset: Preset): Promise<string> {
           ? preset.params.palette
           : preset.params.palette.custom,
       pixelSize: Math.max(1, preset.params.pixelSize),
+      effects: preset.effects,
     },
     [copy],
   );
@@ -52,7 +53,6 @@ export default function PresetsPanel() {
   const importJson = usePresets((s) => s.importJson);
   const exportJson = usePresets((s) => s.exportJson);
   const params = useApp((s) => s.params);
-  const setParams = useApp((s) => s.setParams);
   const [name, setName] = useState("");
   const [notice, setNotice] = useState("");
   const [thumbs, setThumbs] = useState<Map<string, string>>(new Map());
@@ -135,7 +135,7 @@ export default function PresetsPanel() {
             <button
               style={{ padding: 0, border: "1px solid #888", cursor: "pointer" }}
               title={`Apply ${item.preset.name}`}
-              onClick={() => setParams(presetToParams(item.preset))}
+              onClick={() => applyPreset(item.preset)}
             >
               {thumbs.get(thumbKey(item.id, item.preset)) ? (
                 <img
