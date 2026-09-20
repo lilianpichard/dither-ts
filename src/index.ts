@@ -7,4 +7,6 @@ export * from "./ordered.js";
 export * from "./pipeline.js";
 export * from "./effects.js";
 export * from "./prng.js";
+export * from "./vector.js";
+export * from "./ascii.js";
 export { grayscaleFromRGB, floydSteinberg, atkinson } from "./kernels.js";

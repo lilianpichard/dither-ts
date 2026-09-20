@@ -7,6 +7,7 @@ import PresetsPanel from "./presets/PresetsPanel";
 import BatchPanel from "./batch/BatchPanel";
 import EffectsPanel from "./effects/EffectsPanel";
 import Timeline from "./video/Timeline";
+import ExportPanel from "./export/ExportPanel";
 
 let jobSeq = 0;
 
@@ -170,6 +171,7 @@ export default function App() {
       <EffectsPanel />
       <BatchPanel />
       <Timeline />
+      <ExportPanel />
     </main>
   );
 }
