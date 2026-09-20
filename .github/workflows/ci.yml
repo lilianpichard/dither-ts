@@ -31,4 +31,5 @@ jobs:
             echo "absolute asset path breaks file:// loading"; exit 1
           fi
       - run: npm ci --prefix electron
-      - run: npx --prefix electron electron --version
+      # --no-sandbox: runners lack the SUID sandbox helper setup.
+      - run: npx --prefix electron electron --no-sandbox --version
