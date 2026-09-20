@@ -25,9 +25,10 @@ function fill(n: number, v: number): number[] {
 }
 
 describe("method registry", () => {
-  it("lists 23 methods in stable order", () => {
-    assert.equal(METHOD_NAMES.length, 23);
-    assert.equal(METHOD_NAMES[0], "Bayer 2x2");
+  it("lists 24 methods in stable order, None first", () => {
+    assert.equal(METHOD_NAMES.length, 24);
+    assert.equal(METHOD_NAMES[0], "None");
+    assert.equal(METHOD_NAMES[1], "Bayer 2x2");
     assert.equal(METHOD_NAMES[METHOD_NAMES.length - 1], "Blue-Noise Mask");
   });
 });
@@ -45,10 +46,19 @@ describe("ditherGray", () => {
     );
   });
 
-  it("routes every diffusion method without crashing", () => {
+  it("None passes gray values through untouched", () => {
+    const img = gray([10, 200, 130, 90], 4, 1);
+    assert.deepEqual(
+      Array.from(ditherGray(img, { method: "None", threshold: 128 })),
+      [10, 200, 130, 90],
+    );
+  });
+
+  it("routes every dithering method without crashing", () => {
     const img = gray(fill(64, 100), 8, 8);
     for (const name of METHOD_NAMES) {
-      if (name === "Blue-Noise Mask") continue; // ordered-family, covered below
+      // Mask is ordered-family (covered in ordered tests); None passes through.
+      if (name === "Blue-Noise Mask" || name === "None") continue;
       const out = ditherGray(img, { method: name, threshold: 128 });
       assert.equal(out.length, 64, name);
       assert.ok(
@@ -134,6 +144,13 @@ describe("ditherColor", () => {
   it("unknown palette names resolve to B&W output", () => {
     const out = ditherColor(rgb, 2, 2, { method: "Bayer 4x4", palette: "Nope" });
     assert.ok(membersOf(out, PALETTES["B&W"]));
+  });
+
+  it("None passes color pixels through untouched", () => {
+    assert.deepEqual(
+      Array.from(ditherColor(rgb, 2, 2, { method: "None", palette: "GameBoy" })),
+      Array.from(rgb),
+    );
   });
 
   it("applies pixel size on color output", () => {

@@ -76,8 +76,9 @@ export function thresholdBW(img: GrayImage, threshold: number): Uint8Array {
 }
 
 /**
- * Dither a grayscale image. Routes to ordered, error-diffusion, or plain
- * threshold by method name. Applies pixel-size scaling around the core.
+ * Dither a grayscale image. Routes to passthrough, ordered,
+ * error-diffusion, or plain threshold by method name. Applies
+ * pixel-size scaling around the core.
  */
 export function ditherGray(img: GrayImage, options: DitherOptions = {}): Uint8Array {
   const method = options.method ?? "Floyd-Steinberg";
@@ -85,7 +86,12 @@ export function ditherGray(img: GrayImage, options: DitherOptions = {}): Uint8Ar
   const factor = effectivePixelSize(options.pixelSize, options.preview);
   const small = downscaleGray(img, factor);
   let out: Uint8Array;
-  if (ORDERED_SET.has(method)) {
+  if (method === "None") {
+    out = new Uint8Array(small.width * small.height);
+    for (let i = 0; i < out.length; i++) {
+      out[i] = Math.min(255, Math.max(0, Math.round(small.data[i])));
+    }
+  } else if (ORDERED_SET.has(method)) {
     out = orderedBW(small, method, threshold);
   } else if (TABLE_SET.has(method)) {
     out = diffuseBW(small, method, threshold);
@@ -144,9 +150,10 @@ function upscaleRGB(
 }
 
 /**
- * Dither an RGB image against a palette. Ordered methods use the
- * fixed-gain ordered path; diffusion methods use Lab error-diffusion;
- * unknown methods fall back to Floyd-Steinberg.
+ * Dither an RGB image against a palette. "None" passes the pixels
+ * through untouched; ordered methods use the fixed-gain ordered path;
+ * diffusion methods use Lab error-diffusion; unknown methods fall back
+ * to Floyd-Steinberg.
  */
 export function ditherColor(
   rgb: Uint8ClampedArray,
@@ -158,6 +165,9 @@ export function ditherColor(
   const palette = resolvePalette(options.palette ?? DEFAULT_PALETTE);
   const factor = effectivePixelSize(options.pixelSize, options.preview);
   const small = downscaleRGB(rgb, width, height, factor);
+  if (method === "None") {
+    return upscaleRGB(small.data.slice(), small.w, small.h, width, height);
+  }
   const out = ORDERED_SET.has(method)
     ? orderedPalette(small.data, small.w, small.h, palette, method)
     : diffusePalette(small.data, small.w, small.h, palette, method);

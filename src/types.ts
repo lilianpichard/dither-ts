@@ -21,8 +21,9 @@ export function quantizeBW(value: number, threshold: number): 0 | 255 {
   return value > threshold ? 255 : 0;
 }
 
-/** All dither method names, in stable display order. */
+/** All dither method names, in stable display order. "None" passes through. */
 export const METHOD_NAMES: readonly string[] = [
+  "None",
   "Bayer 2x2",
   "Bayer 4x4",
   "Bayer 8x8",
