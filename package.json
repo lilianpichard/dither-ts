@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "npm --prefix app run dev",
+    "desktop": "npm --prefix app run build && npm --prefix electron run dev",
     "start": "npx --yes serve .",
     "test": "npm run build && node --test dist/test/*.test.js",
     "demo": "npm run build && node dist/test/smoke.js",
