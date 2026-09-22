@@ -39,19 +39,11 @@ function copyOf(src: Uint8ClampedArray): Uint8ClampedArray {
   return new Uint8ClampedArray(src);
 }
 
-function gaussianKernel(sigma: number): number[] {
-  const radius = Math.max(1, Math.ceil(sigma * 3));
-  const kernel: number[] = [];
-  let sum = 0;
-  for (let i = -radius; i <= radius; i++) {
-    const v = Math.exp(-(i * i) / (2 * sigma * sigma));
-    kernel.push(v);
-    sum += v;
-  }
-  return kernel.map((v) => v / sum);
-}
-
-/** Separable gaussian blur of the RGB channels; alpha untouched. */
+/**
+ * Fast blur of the RGB channels; alpha untouched. Three sliding-window
+ * box passes approximate a gaussian in O(pixels) time, independent of
+ * radius — unlike a naive kernel, whose cost grows with sigma.
+ */
 function blurRGBA(
   src: Uint8ClampedArray,
   w: number,
@@ -60,37 +52,49 @@ function blurRGBA(
   onRow?: RowProgress,
 ): Uint8ClampedArray {
   if (radius <= 0) return copyOf(src);
-  const k = gaussianKernel(radius);
-  const r = (k.length - 1) / 2;
-  const tmp = new Float32Array(src.length);
-  for (let y = 0; y < h; y++) {
+  const r = Math.max(1, Math.round(radius));
+  const div = 2 * r + 1;
+  let a = new Float32Array(src.length);
+  for (let i = 0; i < src.length; i++) a[i] = src[i];
+  let b = new Float32Array(src.length);
+  const clamp = (v: number, max: number): number => (v < 0 ? 0 : v >= max ? max - 1 : v);
+  for (let pass = 0; pass < 3; pass++) {
+    // Horizontal sliding window.
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      for (let c = 0; c < 3; c++) {
+        let acc = 0;
+        for (let i = -r; i <= r; i++) acc += a[(row + clamp(i, w)) * 4 + c];
+        for (let x = 0; x < w; x++) {
+          b[(row + x) * 4 + c] = acc / div;
+          acc += a[(row + clamp(x + r + 1, w)) * 4 + c] - a[(row + clamp(x - r, w)) * 4 + c];
+        }
+      }
+      for (let x = 0; x < w; x++) b[(row + x) * 4 + 3] = a[(row + x) * 4 + 3];
+    }
+    // Vertical sliding window.
+    const out = pass === 2 ? new Uint8ClampedArray(src.length) : null;
+    const dst: Float32Array | Uint8ClampedArray = out ?? new Float32Array(src.length);
     for (let x = 0; x < w; x++) {
       for (let c = 0; c < 3; c++) {
         let acc = 0;
-        for (let i = 0; i < k.length; i++) {
-          const sx = Math.min(w - 1, Math.max(0, x + i - r));
-          acc += src[(y * w + sx) * 4 + c] * k[i];
+        for (let i = -r; i <= r; i++) acc += b[(clamp(i, h) * w + x) * 4 + c];
+        for (let y = 0; y < h; y++) {
+          dst[(y * w + x) * 4 + c] = acc / div;
+          acc += b[(clamp(y + r + 1, h) * w + x) * 4 + c] - b[(clamp(y - r, h) * w + x) * 4 + c];
         }
-        tmp[(y * w + x) * 4 + c] = acc;
-      }
-      tmp[(y * w + x) * 4 + 3] = src[(y * w + x) * 4 + 3];
-    }
-  }
-  const out = new Uint8ClampedArray(src.length);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      for (let c = 0; c < 4; c++) {
-        let acc = 0;
-        for (let i = 0; i < k.length; i++) {
-          const sy = Math.min(h - 1, Math.max(0, y + i - r));
-          acc += (c === 3 ? src[(sy * w + x) * 4 + c] : tmp[(sy * w + x) * 4 + c]) * k[i];
-        }
-        out[(y * w + x) * 4 + c] = acc;
       }
     }
-    onRow?.(y + 1, h, out, w, h);
+    if (out) {
+      for (let i = 0; i < src.length; i += 4) out[i + 3] = src[i + 3];
+      for (let y = 0; y < h; y++) onRow?.(y + 1, h, out, w, h);
+      return out;
+    }
+    const t = a;
+    a = b;
+    b = t;
   }
-  return out;
+  return copyOf(src);
 }
 
 function glowEffect(
