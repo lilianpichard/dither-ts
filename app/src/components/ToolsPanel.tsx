@@ -1,9 +1,13 @@
+import { Suspense, lazy } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import PresetsPanel from "../presets/PresetsPanel";
 import BatchPanel from "../batch/BatchPanel";
 import EffectsPanel from "../effects/EffectsPanel";
-import Timeline from "../video/Timeline";
 import ExportPanel from "../export/ExportPanel";
+
+// Split: video encoders (mp4-muxer, gifenc) load only on first open.
+const Timeline = lazy(() => import("../video/Timeline"));
 
 const TOOLS = [
   { id: "presets", label: "Presets" },
@@ -49,7 +53,9 @@ export default function ToolsPanel({
           <BatchPanel />
         </TabsContent>
         <TabsContent value="timeline" className="min-h-0 flex-1 overflow-hidden">
-          <Timeline />
+          <Suspense fallback={<Skeleton className="h-48 w-full" />}>
+            <Timeline />
+          </Suspense>
         </TabsContent>
         <TabsContent value="export" className="min-h-0 flex-1 overflow-hidden">
           <ExportPanel />

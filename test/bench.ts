@@ -70,3 +70,58 @@ bench("orderedPalette Pico-8 @540p", () => {
 bench("diffusePalette FS Pico-8 @540p", () => {
   diffusePalette(small, SW, SH, PALETTES["Pico-8"], "Floyd-Steinberg");
 });
+
+// Big photo: 4K still through the full still pipeline.
+{
+  const FW = 3840;
+  const FH = 2160;
+  const photo = patternRGBA(FW, FH);
+  const photoGray = grayImage(FW, FH);
+  bench("4K photo Stucki B&W", () => {
+    diffuseBW(photoGray, "Stucki", 128);
+  });
+  bench("4K photo Bayer Pico-8 color", () => {
+    orderedPalette(
+      ((): Uint8ClampedArray => {
+        const rgb = new Uint8ClampedArray(FW * FH * 3);
+        for (let i = 0; i < rgb.length; i++) rgb[i] = photo[i];
+        return rgb;
+      })(),
+      FW,
+      FH,
+      PALETTES["Pico-8"],
+      "Bayer 4x4",
+    );
+  });
+  bench("4K photo glow+sharpen+grain chain", () => {
+    applyEffects(photo, FW, FH, [
+      { type: "glow", params: defaultEffectParams("glow"), enabled: true },
+      { type: "sharpen", params: defaultEffectParams("sharpen"), enabled: true },
+      { type: "grain", params: defaultEffectParams("grain"), enabled: true },
+    ]);
+  });
+}
+
+// Video simulation: 10 frames of 720p color diffusion + effects.
+{
+  const VW = 1280;
+  const VH = 720;
+  const N = 10;
+  const t0 = performance.now();
+  for (let f = 0; f < N; f++) {
+    const rgb = new Uint8ClampedArray(VW * VH * 3);
+    for (let i = 0; i < rgb.length; i++) rgb[i] = (i * 37 + f * 11) % 256;
+    const out = diffusePalette(rgb, VW, VH, PALETTES["Pico-8"], "Floyd-Steinberg");
+    const rgba = new Uint8ClampedArray(VW * VH * 4);
+    for (let i = 0; i < VW * VH; i++) {
+      rgba[i * 4] = out[i * 3];
+      rgba[i * 4 + 1] = out[i * 3 + 1];
+      rgba[i * 4 + 2] = out[i * 3 + 2];
+      rgba[i * 4 + 3] = 255;
+    }
+    applyEffects(rgba, VW, VH, [
+      { type: "grain", params: defaultEffectParams("grain"), enabled: true },
+    ]);
+  }
+  console.log(`video sim 10x720p FS+grain: ${Math.round(performance.now() - t0)}ms`);
+}

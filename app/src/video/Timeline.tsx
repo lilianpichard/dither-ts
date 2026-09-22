@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { renderImage } from "../worker/client";
+import { getPool } from "../worker/pool";
 import { stripKeys } from "../presets/store";
 import { useApp } from "../store";
 import { captureFrame, loadClip, type LoadedClip } from "./decode";
@@ -139,59 +140,82 @@ export default function Timeline() {
       avgMsRef.current = null;
       totalRef.current = plan.times.length;
       doneRef.current = 0;
-      const frames: ExportFrame[] = [];
+      // Capture stays sequential: one shared video element cannot seek
+      // in parallel. Rendering fans out over the worker pool below.
+      const raws: ImageData[] = [];
+      for (let i = 0; i < plan.times.length; i++) {
+        if (cancelRef.current) throw new Error("cancelled");
+        setPhase(`capture ${i + 1}/${plan.times.length}`);
+        raws.push(await captureFrame(clip, plan.times[i], plan.width, plan.height));
+        setDoneCount(i + 1);
+        doneRef.current = i + 1;
+        setShown(((i + 1) / plan.times.length) * 50);
+      }
+      const parts: Array<{ i: number; f: ExportFrame }> = [];
       const recent: number[] = [];
-      // Smooth the bar between frames: fill toward the next step using
-      // the rolling average frame cost instead of jumping per frame.
+      let completed = 0;
+      // Smooth the bar between frames: fill toward the next completion
+      // using the rolling average frame cost instead of jumping.
       const tickId = setInterval(() => {
         const avg = avgMsRef.current;
         const total = totalRef.current;
         if (avg === null || total === 0) return;
         const elapsed = performance.now() - frameStartRef.current;
-        setShown(((doneRef.current + Math.min(0.999, elapsed / avg)) / total) * 100);
+        setShown(
+          Math.min(50, 50 + ((doneRef.current + Math.min(0.999, elapsed / avg)) / total) * 50),
+        );
       }, 150);
       tick = tickId;
-      for (let i = 0; i < plan.times.length; i++) {
-        if (cancelRef.current) {
-          throw new Error("cancelled");
-        }
-        setPhase(`frame ${i + 1}/${plan.times.length}`);
-        frameStartRef.current = performance.now();
-        const raw = await captureFrame(clip, plan.times[i], plan.width, plan.height);
-        const copy = new Uint8ClampedArray(raw.data).buffer as ArrayBuffer;
-        const res = await renderImage(
-          {
-            width: plan.width,
-            height: plan.height,
-            pixels: copy,
-            color: snapshot.color,
-            method: snapshot.method,
-            threshold: snapshot.threshold,
-            palette: snapshot.palette,
-            pixelSize: snapshot.pixelSize,
-            effects: fx,
-            seed: temporal ? i : 0,
-          },
-          [copy],
-        );
-        frames.push({
-          data: new Uint8ClampedArray(res.pixels),
-          width: res.width,
-          height: res.height,
-        });
-        setDoneCount(i + 1);
-        doneRef.current = i + 1;
-        setShown(((i + 1) / plan.times.length) * 100);
-        const dt = performance.now() - frameStartRef.current;
-        avgMsRef.current = avgMsRef.current === null ? dt : avgMsRef.current * 0.7 + dt * 0.3;
-        recent.push(dt);
-        if (recent.length > 8) recent.shift();
-        if (recent.length >= 2) {
-          const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
-          setEtaMs(avg * (plan.times.length - (i + 1)));
-        }
-      }
+      frameStartRef.current = performance.now();
+      const pool = getPool();
+      await Promise.all(
+        raws.map((raw, i) =>
+          (async () => {
+            const jobStart = performance.now();
+            const copy = new Uint8ClampedArray(raw.data).buffer as ArrayBuffer;
+            const res = await pool.render(
+              {
+                width: plan.width,
+                height: plan.height,
+                pixels: copy,
+                color: snapshot.color,
+                method: snapshot.method,
+                threshold: snapshot.threshold,
+                palette: snapshot.palette,
+                pixelSize: snapshot.pixelSize,
+                effects: fx,
+                seed: temporal ? i : 0,
+              },
+              [copy],
+            );
+            parts.push({
+              i,
+              f: {
+                data: new Uint8ClampedArray(res.pixels),
+                width: res.width,
+                height: res.height,
+              },
+            });
+            const dt = performance.now() - jobStart;
+            recent.push(dt);
+            if (recent.length > 8) recent.shift();
+            avgMsRef.current = dt;
+            completed++;
+            setDoneCount(completed);
+            doneRef.current = completed;
+            frameStartRef.current = performance.now();
+            setShown(50 + (completed / plan.times.length) * 50);
+            if (recent.length >= 2) {
+              const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
+              setEtaMs(avg * (plan.times.length - completed));
+            }
+            setPhase(`frame ${completed}/${plan.times.length}`);
+          })(),
+        ),
+      );
+      if (cancelRef.current) throw new Error("cancelled");
       clearInterval(tick);
+      const frames = parts.sort((a, b) => a.i - b.i).map((p) => p.f);
       setPhase("encoding…");
       setEtaMs(null);
       const stem = fileName.replace(/\.[^.]+$/, "") || "clip";
@@ -199,14 +223,14 @@ export default function Timeline() {
         const blob = await exportMp4(frames, plan.fps, (d, t) => {
           setDoneCount(d);
           setTotalCount(t);
-          setShown(t > 0 ? (d / t) * 100 : 0);
+          setShown(t > 0 ? 50 + (d / t) * 50 : 50);
         });
         download(URL.createObjectURL(blob), `${stem}.dither.mp4`);
       } else {
         const blob = exportGif(frames, plan.fps, snapshot.palette, (d, t) => {
           setDoneCount(d);
           setTotalCount(t);
-          setShown(t > 0 ? (d / t) * 100 : 0);
+          setShown(t > 0 ? 50 + (d / t) * 50 : 50);
         });
         download(URL.createObjectURL(blob), `${stem}.dither.gif`);
       }
