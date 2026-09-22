@@ -17,9 +17,18 @@ const LAB_EPS = 0.008856;
 const LAB_KAPPA = 903.3;
 
 function linearize(v: number): number {
-  const c = v / 255;
-  return c > 0.04045 ? ((c + 0.055) / 1.055) ** 2.4 : c / 12.92;
+  return LINEAR_LUT[Math.min(255, Math.max(0, Math.round(v)))];
 }
+
+/** Exact 256-entry table of the sRGB transfer curve (no per-pixel pow). */
+const LINEAR_LUT: Float32Array = (() => {
+  const lut = new Float32Array(256);
+  for (let v = 0; v < 256; v++) {
+    const c = v / 255;
+    lut[v] = c > 0.04045 ? ((c + 0.055) / 1.055) ** 2.4 : c / 12.92;
+  }
+  return lut;
+})();
 
 function labF(t: number): number {
   return t > LAB_EPS ? Math.cbrt(t) : (LAB_KAPPA * t + 16) / 116;

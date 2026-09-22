@@ -95,11 +95,19 @@ export const DOT_CLASS: number[][] = [
   [1, 3, 5, 7],
 ];
 
-/** Procedural crosshatch field (0..255) for w*h. */
+const crosshatchCache = new Map<string, number[][]>();
+
+/** Procedural crosshatch field (0..255) for w*h. Cached per size. */
 export function crosshatchField(w: number, h: number): number[][] {
-  return Array.from({ length: h }, (_, y) =>
+  const key = `${w}x${h}`;
+  const hit = crosshatchCache.get(key);
+  if (hit) return hit;
+  const field = Array.from({ length: h }, (_, y) =>
     Array.from({ length: w }, (__, x) => (Math.sin(x * 0.5) + Math.sin(y * 0.5)) * 64 + 128),
   );
+  if (crosshatchCache.size >= 8) crosshatchCache.clear();
+  crosshatchCache.set(key, field);
+  return field;
 }
 
 const MASK_SIZE = 64;

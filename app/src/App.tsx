@@ -93,8 +93,9 @@ export default function App() {
             pixelSize: params.pixelSize,
             effects: stripKeys(effects),
             seed: 0,
-            // Stream every ~24 rows so the canvas reveals top-to-bottom.
-            progressEvery: Math.max(1, Math.floor(h / 24)),
+            // Stream ~16 partials on large previews; small images
+            // finish in one go (copies would cost more than they show).
+            progressEvery: h > 400 ? Math.max(1, Math.floor(h / 16)) : 0,
           },
           [pixels],
           (u) => {
