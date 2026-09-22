@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { renderImage } from "../worker/client";
 import { stripKeys } from "../presets/store";
 import { useApp } from "../store";
@@ -6,6 +7,23 @@ import { captureFrame, loadClip, type LoadedClip } from "./decode";
 import { exportGif } from "./exportGif";
 import { canExportMp4, exportMp4, type ExportFrame } from "./exportMp4";
 import { planFrames } from "./jobs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 
 function download(url: string, filename: string) {
   const a = document.createElement("a");
@@ -24,7 +42,9 @@ export default function Timeline() {
   const [fps, setFps] = useState(12);
   const [temporal, setTemporal] = useState(false);
   const [working, setWorking] = useState(false);
-  const [progress, setProgress] = useState("");
+  const [doneCount, setDoneCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [phase, setPhase] = useState("");
   const [error, setError] = useState("");
   const cancelRef = useRef(false);
   const frameRef = useRef<HTMLCanvasElement>(null);
@@ -96,10 +116,12 @@ export default function Timeline() {
       const snapshot = { ...params };
       const fx = stripKeys(useApp.getState().effects);
       const plan = planFrames(clip.info, range, fps, snapshot.method);
+      setTotalCount(plan.times.length);
+      setDoneCount(0);
       const frames: ExportFrame[] = [];
       for (let i = 0; i < plan.times.length; i++) {
         if (cancelRef.current) throw new Error("cancelled");
-        setProgress(`frame ${i + 1}/${plan.times.length}`);
+        setPhase(`frame ${i + 1}/${plan.times.length}`);
         const raw = await captureFrame(clip, plan.times[i], plan.width, plan.height);
         const copy = new Uint8ClampedArray(raw.data).buffer as ArrayBuffer;
         const res = await renderImage(
@@ -122,116 +144,149 @@ export default function Timeline() {
           width: res.width,
           height: res.height,
         });
+        setDoneCount(i + 1);
       }
-      setProgress("encoding…");
+      setPhase("encoding…");
       const stem = fileName.replace(/\.[^.]+$/, "") || "clip";
       if (kind === "mp4") {
-        const blob = await exportMp4(frames, plan.fps, (d, t) => setProgress(`encode ${d}/${t}`));
+        const blob = await exportMp4(frames, plan.fps, (d, t) => {
+          setDoneCount(d);
+          setTotalCount(t);
+        });
         download(URL.createObjectURL(blob), `${stem}.dither.mp4`);
       } else {
-        const blob = exportGif(frames, plan.fps, snapshot.palette, (d, t) =>
-          setProgress(`encode ${d}/${t}`),
-        );
+        const blob = exportGif(frames, plan.fps, snapshot.palette, (d, t) => {
+          setDoneCount(d);
+          setTotalCount(t);
+        });
         download(URL.createObjectURL(blob), `${stem}.dither.gif`);
       }
-      setProgress("done");
+      setPhase("done");
+      toast.success(`Exported ${stem}.dither.${kind}`);
     } catch (e) {
       setError(String(e));
-      setProgress("");
+      setPhase("");
     }
     setWorking(false);
   }
 
   return (
-    <section>
-      <h2>Video timeline</h2>
-      <div className="row">
-        <input type="file" accept="video/*" onChange={(e) => void onFile(e.target.files?.[0])} />
-        {clip && (
-          <span id="status">
-            {clip.info.width}×{clip.info.height}, {clip.info.duration.toFixed(1)}s
-          </span>
-        )}
-      </div>
-      {clip && (
-        <>
-          <div className="row">
-            <label>
-              scrub{" "}
-              <input
-                type="range"
-                min={0}
-                max={clip.info.duration}
-                step={0.05}
-                value={time}
-                onChange={(e) => onScrub(Number(e.target.value))}
-              />{" "}
-              {time.toFixed(2)}s
-            </label>
-            <label>
-              in{" "}
-              <input
-                type="number"
-                min={0}
-                max={clip.info.duration}
-                step={0.1}
-                value={range.start}
-                onChange={(e) => setRange((r) => ({ ...r, start: Number(e.target.value) }))}
-              />
-            </label>
-            <label>
-              out{" "}
-              <input
-                type="number"
-                min={0}
-                max={clip.info.duration}
-                step={0.1}
-                value={range.end}
-                onChange={(e) => setRange((r) => ({ ...r, end: Number(e.target.value) }))}
-              />
-            </label>
-            <label>
-              fps{" "}
-              <select value={fps} onChange={(e) => setFps(Number(e.target.value))}>
-                {[5, 8, 12, 15, 24, 30].map((f) => (
-                  <option key={f} value={f}>
-                    {f}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={temporal}
-                onChange={(e) => setTemporal(e.target.checked)}
-              />{" "}
-              temporal noise
-            </label>
-          </div>
-          <div className="row">
-            <canvas ref={frameRef} />
-          </div>
-          <div className="row">
-            <button
-              disabled={working || !canExportMp4()}
-              title={canExportMp4() ? "" : "WebCodecs unavailable"}
-              onClick={() => void runExport("mp4")}
-            >
-              Export MP4
-            </button>
-            <button disabled={working} onClick={() => void runExport("gif")}>
-              Export GIF
-            </button>
-            {working && <button onClick={() => (cancelRef.current = true)}>Cancel</button>}
-            {(progress || error) && (
-              <span id="status">
-                {progress} {error}
-              </span>
+    <Card>
+      <CardHeader>
+        <CardTitle>Video timeline</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <Input
+            type="file"
+            accept="video/*"
+            className="w-64"
+            onChange={(e) => void onFile(e.target.files?.[0])}
+          />
+          {clip && (
+            <Badge variant="secondary">
+              {clip.info.width}×{clip.info.height}, {clip.info.duration.toFixed(1)}s
+            </Badge>
+          )}
+        </div>
+        {!clip ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>No video loaded</EmptyTitle>
+              <EmptyDescription>Choose a video file to scrub and export frames.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Label>Scrub {time.toFixed(2)}s</Label>
+                <Slider
+                  className="w-48"
+                  min={0}
+                  max={clip.info.duration}
+                  step={0.05}
+                  value={[time]}
+                  onValueChange={([v]) => onScrub(v)}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="range-in">In</Label>
+                <Input
+                  id="range-in"
+                  type="number"
+                  className="w-20"
+                  min={0}
+                  max={clip.info.duration}
+                  step={0.1}
+                  value={range.start}
+                  onChange={(e) => setRange((r) => ({ ...r, start: Number(e.target.value) }))}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="range-out">Out</Label>
+                <Input
+                  id="range-out"
+                  type="number"
+                  className="w-20"
+                  min={0}
+                  max={clip.info.duration}
+                  step={0.1}
+                  value={range.end}
+                  onChange={(e) => setRange((r) => ({ ...r, end: Number(e.target.value) }))}
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Label>FPS</Label>
+                <Select value={String(fps)} onValueChange={(v) => setFps(Number(v))}>
+                  <SelectTrigger className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[5, 8, 12, 15, 24, 30].map((f) => (
+                      <SelectItem key={f} value={String(f)}>
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch id="temporal" checked={temporal} onCheckedChange={setTemporal} />
+                <Label htmlFor="temporal">Temporal noise</Label>
+              </div>
+            </div>
+            <canvas ref={frameRef} className="max-w-full rounded border" />
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                disabled={working || !canExportMp4()}
+                title={canExportMp4() ? "" : "WebCodecs unavailable"}
+                onClick={() => void runExport("mp4")}
+              >
+                Export MP4
+              </Button>
+              <Button disabled={working} variant="secondary" onClick={() => void runExport("gif")}>
+                Export GIF
+              </Button>
+              {working && (
+                <Button variant="outline" onClick={() => (cancelRef.current = true)}>
+                  Cancel
+                </Button>
+              )}
+              {working && totalCount > 0 && (
+                <Progress value={(doneCount / totalCount) * 100} className="w-48" />
+              )}
+              {phase && !error && <Badge variant="secondary">{phase}</Badge>}
+            </div>
+            {error && (
+              <Alert variant="destructive">
+                <AlertTitle>Export failed</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
-          </div>
-        </>
-      )}
-    </section>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

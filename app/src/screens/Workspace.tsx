@@ -1,5 +1,26 @@
 import { useEffect, useRef } from "react";
 import { METHOD_NAMES, PALETTES } from "../../../src/index.js";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { renderImage } from "../worker/client";
 import { stripKeys } from "../presets/store";
 import { useApp } from "../store";
@@ -86,82 +107,117 @@ export default function Workspace() {
   }, [result]);
 
   return (
-    <section>
-      <h2>Workspace</h2>
-      <div className="row">
-        <input type="file" accept="image/*" onChange={(e) => void onFile(e.target.files?.[0])} />
-        <select value={params.method} onChange={(e) => setParams({ method: e.target.value })}>
-          {METHOD_NAMES.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
-        <label>
-          <input
-            type="checkbox"
-            checked={params.color}
-            onChange={(e) => setParams({ color: e.target.checked })}
-          />{" "}
-          color
-        </label>
-        {params.color && (
-          <select
-            value={typeof params.palette === "string" ? params.palette : "custom"}
-            onChange={(e) => {
-              if (e.target.value !== "custom") setParams({ palette: e.target.value });
-            }}
-          >
-            {Object.keys(PALETTES).map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-            {typeof params.palette !== "string" && (
-              <option value="custom" disabled>
-                Custom
-              </option>
-            )}
-          </select>
-        )}
-        {!params.color && (
-          <label>
-            threshold{" "}
-            <input
-              type="range"
+    <Card>
+      <CardHeader>
+        <CardTitle>Workspace</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <Input
+            type="file"
+            accept="image/*"
+            className="w-56"
+            onChange={(e) => void onFile(e.target.files?.[0])}
+          />
+          <Select value={params.method} onValueChange={(v) => setParams({ method: v })}>
+            <SelectTrigger className="w-52">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {METHOD_NAMES.map((n) => (
+                <SelectItem key={n} value={n}>
+                  {n}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-2">
+            <Switch
+              id="color"
+              checked={params.color}
+              onCheckedChange={(v) => setParams({ color: v })}
+            />
+            <Label htmlFor="color">Color</Label>
+          </div>
+          {params.color && (
+            <Select
+              value={typeof params.palette === "string" ? params.palette : "custom"}
+              onValueChange={(v) => {
+                if (v !== "custom") setParams({ palette: v });
+              }}
+            >
+              <SelectTrigger className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.keys(PALETTES).map((n) => (
+                  <SelectItem key={n} value={n}>
+                    {n}
+                  </SelectItem>
+                ))}
+                {typeof params.palette !== "string" && (
+                  <SelectItem value="custom" disabled>
+                    Custom
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          )}
+          {!params.color && (
+            <div className="flex items-center gap-2">
+              <Label>Threshold {params.threshold}</Label>
+              <Slider
+                className="w-36"
+                min={1}
+                max={254}
+                value={[params.threshold]}
+                onValueChange={([v]) => setParams({ threshold: v })}
+              />
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Label>Pixel size {params.pixelSize}</Label>
+            <Slider
+              className="w-28"
               min={1}
-              max={254}
-              value={params.threshold}
-              onChange={(e) => setParams({ threshold: Number(e.target.value) })}
-            />{" "}
-            {params.threshold}
-          </label>
+              max={8}
+              step={1}
+              value={[params.pixelSize]}
+              onValueChange={([v]) => setParams({ pixelSize: v })}
+            />
+          </div>
+        </div>
+        {!source ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>No image loaded</EmptyTitle>
+              <EmptyDescription>Choose an image file to start dithering.</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Input
+                type="file"
+                accept="image/*"
+                className="w-56"
+                onChange={(e) => void onFile(e.target.files?.[0])}
+              />
+            </EmptyContent>
+          </Empty>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-3">
+              <canvas ref={origRef} className="max-w-1/2 rounded border" />
+              {rendering && !result ? (
+                <Skeleton className="aspect-square w-1/2" />
+              ) : (
+                <canvas ref={outRef} className="max-w-1/2 rounded border" />
+              )}
+            </div>
+            <Badge variant={rendering ? "secondary" : "default"} className="w-fit">
+              {rendering ? "Rendering…" : result ? `Done in ${result.ms.toFixed(1)} ms` : "Ready"}
+            </Badge>
+          </>
         )}
-        <label>
-          pixel size{" "}
-          <input
-            type="range"
-            min={1}
-            max={8}
-            value={params.pixelSize}
-            onChange={(e) => setParams({ pixelSize: Number(e.target.value) })}
-          />{" "}
-          {params.pixelSize}
-        </label>
-      </div>
-      <div className="row">
-        <canvas ref={origRef} />
-        <canvas ref={outRef} />
-      </div>
-      <p id="status">
-        {!source
-          ? "Choose an image to start."
-          : rendering
-            ? "Rendering…"
-            : result
-              ? `Done in ${result.ms.toFixed(1)} ms.`
-              : "Ready."}
-      </p>
-    </section>
+      </CardContent>
+    </Card>
   );
 }

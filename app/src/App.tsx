@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toaster } from "@/components/ui/sonner";
 import Workspace from "./screens/Workspace";
 import PresetsPanel from "./presets/PresetsPanel";
 import BatchPanel from "./batch/BatchPanel";
@@ -21,21 +23,36 @@ export default function App() {
   const [screen, setScreen] = useState<ScreenId>("workspace");
 
   return (
-    <main>
-      <h1>dither-ts</h1>
-      <nav className="row">
-        {SCREENS.map((s) => (
-          <button key={s.id} disabled={s.id === screen} onClick={() => setScreen(s.id)}>
-            {s.label}
-          </button>
-        ))}
-      </nav>
-      {screen === "workspace" && <Workspace />}
-      {screen === "presets" && <PresetsPanel />}
-      {screen === "effects" && <EffectsPanel />}
-      {screen === "batch" && <BatchPanel />}
-      {screen === "timeline" && <Timeline />}
-      {screen === "export" && <ExportPanel />}
+    <main className="mx-auto max-w-6xl p-4">
+      <h1 className="mb-4 text-2xl font-bold">dither-ts</h1>
+      <Tabs value={screen} onValueChange={(v) => setScreen(v as ScreenId)}>
+        <TabsList>
+          {SCREENS.map((s) => (
+            <TabsTrigger key={s.id} value={s.id}>
+              {s.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value="workspace">
+          <Workspace />
+        </TabsContent>
+        <TabsContent value="presets">
+          <PresetsPanel />
+        </TabsContent>
+        <TabsContent value="effects">
+          <EffectsPanel />
+        </TabsContent>
+        <TabsContent value="batch">
+          <BatchPanel />
+        </TabsContent>
+        <TabsContent value="timeline">
+          <Timeline />
+        </TabsContent>
+        <TabsContent value="export">
+          <ExportPanel />
+        </TabsContent>
+      </Tabs>
+      <Toaster />
     </main>
   );
 }
