@@ -29,7 +29,6 @@ export default function BatchPanel() {
   effectsRef.current = effects;
   const [items, setItems] = useState<BatchItem[]>([]);
   const [running, setRunning] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   async function run(files: File[]) {
     setRunning(true);
@@ -101,14 +100,13 @@ export default function BatchPanel() {
   const done = items.filter((it) => it.status === "done" || it.status === "error").length;
 
   return (
-    <Card>
+    <Card className="h-full overflow-y-auto">
       <CardHeader>
         <CardTitle>Batch</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-3">
           <Input
-            ref={inputRef}
             type="file"
             accept="image/*"
             multiple

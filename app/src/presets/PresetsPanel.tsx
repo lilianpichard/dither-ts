@@ -129,7 +129,7 @@ export default function PresetsPanel() {
 
   return (
     <TooltipProvider>
-      <Card>
+      <Card className="h-full overflow-y-auto">
         <CardHeader>
           <CardTitle>Presets</CardTitle>
         </CardHeader>

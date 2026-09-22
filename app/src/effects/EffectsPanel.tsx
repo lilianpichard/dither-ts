@@ -26,7 +26,7 @@ export default function EffectsPanel() {
   const [picked, setPicked] = useState(EFFECT_DEFS[0].type);
 
   return (
-    <Card>
+    <Card className="h-full overflow-y-auto">
       <CardHeader>
         <CardTitle>Effects</CardTitle>
       </CardHeader>

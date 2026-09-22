@@ -90,7 +90,7 @@ export default function ExportPanel() {
   }
 
   return (
-    <Card>
+    <Card className="h-full overflow-y-auto">
       <CardHeader>
         <CardTitle>Export</CardTitle>
       </CardHeader>

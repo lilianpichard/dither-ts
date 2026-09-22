@@ -48,6 +48,7 @@ export default function Timeline() {
   const [error, setError] = useState("");
   const cancelRef = useRef(false);
   const frameRef = useRef<HTMLCanvasElement>(null);
+  const previewSeq = useRef(0);
 
   useEffect(() => () => clip?.revoke(), [clip]);
 
@@ -68,6 +69,7 @@ export default function Timeline() {
 
   async function previewFrame(t: number) {
     if (!clip) return;
+    const mySeq = ++previewSeq.current;
     const plan = planFrames(
       clip.info,
       range.end > 0 ? range : { start: 0, end: clip.info.duration },
@@ -92,7 +94,7 @@ export default function Timeline() {
       [copy],
     );
     const c = frameRef.current;
-    if (!c) return;
+    if (!c || mySeq !== previewSeq.current) return;
     c.width = res.width;
     c.height = res.height;
     c.getContext("2d")!.putImageData(
@@ -171,7 +173,7 @@ export default function Timeline() {
   }
 
   return (
-    <Card>
+    <Card className="h-full overflow-y-auto">
       <CardHeader>
         <CardTitle>Video timeline</CardTitle>
       </CardHeader>
