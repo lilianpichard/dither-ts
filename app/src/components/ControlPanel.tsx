@@ -1,8 +1,8 @@
 import { METHOD_NAMES, PALETTES } from "../../../src/index.js";
 import { useApp } from "../store";
+import { ImageDropzone } from "./ImageDropzone";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -28,7 +28,12 @@ export default function ControlPanel({ onFile }: { onFile: (f: File | undefined)
         <CardTitle>Controls</CardTitle>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
-        <Input type="file" accept="image/*" onChange={(e) => void onFile(e.target.files?.[0])} />
+        <ImageDropzone
+          onFile={(f) => void onFile(f)}
+          fileName={source?.name}
+          busy={rendering}
+          busyLabel="Rendering…"
+        />
         <div className="flex flex-col gap-2">
           <Label>Method</Label>
           <Select value={params.method} onValueChange={(v) => setParams({ method: v })}>

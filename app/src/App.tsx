@@ -4,6 +4,7 @@ import { stripKeys } from "./presets/store";
 import { useApp } from "./store";
 import CanvasViewport from "./components/CanvasViewport";
 import ControlPanel from "./components/ControlPanel";
+import { ImageDropzone } from "./components/ImageDropzone";
 import ToolsPanel, { TOOL_IDS, type ToolId } from "./components/ToolsPanel";
 import { Toaster } from "@/components/ui/sonner";
 import {
@@ -13,7 +14,6 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 
 let jobSeq = 0;
@@ -27,7 +27,12 @@ async function fileToSource(file: File) {
   ctx.drawImage(bmp, 0, 0);
   const data = ctx.getImageData(0, 0, bmp.width, bmp.height);
   const copy = new Uint8ClampedArray(data.data);
-  return { width: bmp.width, height: bmp.height, pixels: copy.buffer as ArrayBuffer };
+  return {
+    width: bmp.width,
+    height: bmp.height,
+    pixels: copy.buffer as ArrayBuffer,
+    name: file.name,
+  };
 }
 
 export default function App() {
@@ -106,12 +111,7 @@ export default function App() {
                   </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    className="w-56"
-                    onChange={(e) => void onFile(e.target.files?.[0])}
-                  />
+                  <ImageDropzone onFile={(f) => void onFile(f)} className="w-64" />
                 </EmptyContent>
               </Empty>
             </Card>

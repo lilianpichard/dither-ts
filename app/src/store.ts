@@ -14,6 +14,7 @@ export interface ImageSource {
   width: number;
   height: number;
   pixels: ArrayBuffer; // RGBA
+  name: string;
 }
 
 export interface RenderResult {
