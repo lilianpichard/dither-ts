@@ -3,6 +3,7 @@
 // Every randomized effect is seeded: same inputs give same pixels.
 
 import { mulberry32 } from "./prng.js";
+import type { RowProgress } from "./types.js";
 
 export interface EffectParams {
   [key: string]: number;
@@ -51,7 +52,13 @@ function gaussianKernel(sigma: number): number[] {
 }
 
 /** Separable gaussian blur of the RGB channels; alpha untouched. */
-function blurRGBA(src: Uint8ClampedArray, w: number, h: number, radius: number): Uint8ClampedArray {
+function blurRGBA(
+  src: Uint8ClampedArray,
+  w: number,
+  h: number,
+  radius: number,
+  onRow?: RowProgress,
+): Uint8ClampedArray {
   if (radius <= 0) return copyOf(src);
   const k = gaussianKernel(radius);
   const r = (k.length - 1) / 2;
@@ -81,6 +88,7 @@ function blurRGBA(src: Uint8ClampedArray, w: number, h: number, radius: number):
         out[(y * w + x) * 4 + c] = acc;
       }
     }
+    onRow?.(y + 1, h, out, w, h);
   }
   return out;
 }
@@ -90,19 +98,24 @@ function glowEffect(
   w: number,
   h: number,
   params: EffectParams,
+  onRow?: RowProgress,
 ): Uint8ClampedArray {
   const radius = num(params, "radius", 4);
   const k = num(params, "intensity", 30) / 100;
   if (radius <= 0 || k <= 0) return copyOf(src);
   const blurred = blurRGBA(src, w, h, radius);
   const out = new Uint8ClampedArray(src.length);
-  for (let i = 0; i < src.length; i += 4) {
-    for (let c = 0; c < 3; c++) {
-      const base = src[i + c];
-      const glow = Math.min(255, blurred[i + c] * k);
-      out[i + c] = base + glow - (base * glow) / 255;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      for (let c = 0; c < 3; c++) {
+        const base = src[i + c];
+        const glow = Math.min(255, blurred[i + c] * k);
+        out[i + c] = base + glow - (base * glow) / 255;
+      }
+      out[i + 3] = src[i + 3];
     }
-    out[i + 3] = src[i + 3];
+    onRow?.(y + 1, h, out, w, h);
   }
   return out;
 }
@@ -112,6 +125,7 @@ function aberrationEffect(
   w: number,
   h: number,
   params: EffectParams,
+  onRow?: RowProgress,
 ): Uint8ClampedArray {
   const ox = Math.round(num(params, "offset", 2));
   if (ox === 0) return copyOf(src);
@@ -126,6 +140,7 @@ function aberrationEffect(
       out[d + 2] = src[rr + 2];
       out[d + 3] = src[d + 3];
     }
+    onRow?.(y + 1, h, out, w, h);
   }
   return out;
 }
@@ -135,8 +150,9 @@ function blurEffect(
   w: number,
   h: number,
   params: EffectParams,
+  onRow?: RowProgress,
 ): Uint8ClampedArray {
-  return blurRGBA(src, w, h, num(params, "radius", 2));
+  return blurRGBA(src, w, h, num(params, "radius", 2), onRow);
 }
 
 function sharpenEffect(
@@ -144,14 +160,19 @@ function sharpenEffect(
   w: number,
   h: number,
   params: EffectParams,
+  onRow?: RowProgress,
 ): Uint8ClampedArray {
   const amount = num(params, "amount", 1);
   if (amount <= 0) return copyOf(src);
   const blurred = blurRGBA(src, w, h, 1);
   const out = new Uint8ClampedArray(src.length);
-  for (let i = 0; i < src.length; i += 4) {
-    for (let c = 0; c < 3; c++) out[i + c] = src[i + c] + (src[i + c] - blurred[i + c]) * amount;
-    out[i + 3] = src[i + 3];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      for (let c = 0; c < 3; c++) out[i + c] = src[i + c] + (src[i + c] - blurred[i + c]) * amount;
+      out[i + 3] = src[i + 3];
+    }
+    onRow?.(y + 1, h, out, w, h);
   }
   return out;
 }
@@ -161,6 +182,7 @@ function jpegEffect(
   w: number,
   h: number,
   params: EffectParams,
+  onRow?: RowProgress,
 ): Uint8ClampedArray {
   const quality = Math.min(100, Math.max(1, num(params, "quality", 50)));
   const rand = mulberry32(Math.floor(num(params, "seed", 1)));
@@ -181,6 +203,7 @@ function jpegEffect(
         }
       }
     }
+    onRow?.(Math.min(h, by + 8), h, out, w, h);
   }
   return out;
 }
@@ -190,17 +213,22 @@ function scanlinesEffect(
   w: number,
   h: number,
   params: EffectParams,
+  onRow?: RowProgress,
 ): Uint8ClampedArray {
   const pitch = Math.max(1, Math.round(num(params, "pitch", 3)));
   const s = Math.min(1, Math.max(0, num(params, "strength", 30) / 100));
   if (s <= 0) return copyOf(src);
   const out = copyOf(src);
   for (let y = 0; y < h; y++) {
-    if (y % pitch !== pitch - 1) continue;
+    if (y % pitch !== pitch - 1) {
+      onRow?.(y + 1, h, out, w, h);
+      continue;
+    }
     for (let x = 0; x < w; x++) {
       const d = (y * w + x) * 4;
       for (let c = 0; c < 3; c++) out[d + c] = src[d + c] * (1 - s);
     }
+    onRow?.(y + 1, h, out, w, h);
   }
   return out;
 }
@@ -210,20 +238,31 @@ function grainEffect(
   w: number,
   h: number,
   params: EffectParams,
+  onRow?: RowProgress,
 ): Uint8ClampedArray {
   const amount = Math.max(0, num(params, "amount", 10));
   if (amount <= 0) return copyOf(src);
   const rand = mulberry32(Math.floor(num(params, "seed", 1)));
   const out = copyOf(src);
-  for (let i = 0; i < out.length; i += 4) {
-    for (let c = 0; c < 3; c++) out[i + c] = src[i + c] + (rand() * 2 - 1) * amount;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      for (let c = 0; c < 3; c++) out[i + c] = src[i + c] + (rand() * 2 - 1) * amount;
+    }
+    onRow?.(y + 1, h, out, w, h);
   }
   return out;
 }
 
 const APPLY: Record<
   string,
-  (src: Uint8ClampedArray, w: number, h: number, params: EffectParams) => Uint8ClampedArray
+  (
+    src: Uint8ClampedArray,
+    w: number,
+    h: number,
+    params: EffectParams,
+    onRow?: RowProgress,
+  ) => Uint8ClampedArray
 > = {
   glow: glowEffect,
   "chromatic-aberration": aberrationEffect,
@@ -300,9 +339,10 @@ export function applyEffect(
   h: number,
   type: string,
   params: EffectParams,
+  onRow?: RowProgress,
 ): Uint8ClampedArray {
   const fn = APPLY[type];
-  return fn ? fn(src, w, h, params) : copyOf(src);
+  return fn ? fn(src, w, h, params, onRow) : copyOf(src);
 }
 
 /** Run the enabled chain in order; disabled and unknown entries are no-ops. */
@@ -311,10 +351,11 @@ export function applyEffects(
   w: number,
   h: number,
   effects: EffectInstance[],
+  onRow?: RowProgress,
 ): Uint8ClampedArray {
   let buf = copyOf(src);
   for (const e of effects) {
-    if (e.enabled) buf = applyEffect(buf, w, h, e.type, e.params);
+    if (e.enabled) buf = applyEffect(buf, w, h, e.type, e.params, onRow);
   }
   return buf;
 }

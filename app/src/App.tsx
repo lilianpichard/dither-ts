@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { renderImage } from "./worker/client";
 import { stripKeys } from "./presets/store";
 import { useApp } from "./store";
+import { MAX_HEAVY_PREVIEW_DIM, fitSize, isHeavyMethod } from "./video/jobs";
 import CanvasViewport from "./components/CanvasViewport";
 import ControlPanel from "./components/ControlPanel";
 import { ImageDropzone } from "./components/ImageDropzone";
@@ -43,6 +45,7 @@ export default function App() {
   const setSource = useApp((s) => s.setSource);
   const setResult = useApp((s) => s.setResult);
   const setRendering = useApp((s) => s.setRendering);
+  const setPreviewScaled = useApp((s) => s.setPreviewScaled);
   const [tool, setTool] = useState<ToolId>("presets");
 
   async function onFile(file: File | undefined) {
@@ -55,27 +58,67 @@ export default function App() {
     setRendering(true);
     const timer = setTimeout(async () => {
       const jobId = ++jobSeq;
-      const copy = source.pixels.slice(0);
-      const res = await renderImage(
-        {
-          width: source.width,
-          height: source.height,
-          pixels: copy,
-          color: params.color,
-          method: params.method,
-          threshold: params.threshold,
-          palette: params.palette,
-          pixelSize: params.pixelSize,
-          effects: stripKeys(effects),
-          seed: 0,
-        },
-        [copy],
-      );
-      if (jobId !== jobSeq) return; // stale: a newer job superseded this one
-      setResult({ width: res.width, height: res.height, pixels: res.pixels, ms: res.ms, jobId });
+      try {
+        let w = source.width;
+        let h = source.height;
+        let pixels = source.pixels.slice(0);
+        const capped = isHeavyMethod(params.method) && Math.max(w, h) > MAX_HEAVY_PREVIEW_DIM;
+        if (capped) {
+          const size = fitSize(w, h, MAX_HEAVY_PREVIEW_DIM);
+          const full = document.createElement("canvas");
+          full.width = w;
+          full.height = h;
+          full
+            .getContext("2d")!
+            .putImageData(new ImageData(new Uint8ClampedArray(pixels), w, h), 0, 0);
+          const small = document.createElement("canvas");
+          small.width = size.width;
+          small.height = size.height;
+          small.getContext("2d")!.drawImage(full, 0, 0, size.width, size.height);
+          const data = small.getContext("2d")!.getImageData(0, 0, size.width, size.height);
+          w = size.width;
+          h = size.height;
+          pixels = new Uint8ClampedArray(data.data).buffer as ArrayBuffer;
+        }
+        setPreviewScaled(capped);
+        const res = await renderImage(
+          {
+            width: w,
+            height: h,
+            pixels: pixels,
+            color: params.color,
+            method: params.method,
+            threshold: params.threshold,
+            palette: params.palette,
+            pixelSize: params.pixelSize,
+            effects: stripKeys(effects),
+            seed: 0,
+            // Stream every ~24 rows so the canvas reveals top-to-bottom.
+            progressEvery: Math.max(1, Math.floor(h / 24)),
+          },
+          [pixels],
+          (u) => {
+            if (jobId !== jobSeq) return;
+            setResult({
+              width: u.width,
+              height: u.height,
+              pixels: u.pixels,
+              ms: 0,
+              jobId,
+              partial: true,
+            });
+          },
+        );
+        if (jobId !== jobSeq) return; // stale: a newer job superseded this one
+        setResult({ width: res.width, height: res.height, pixels: res.pixels, ms: res.ms, jobId });
+      } catch (err) {
+        if (jobId !== jobSeq) return;
+        setRendering(false);
+        toast.error(`Render failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }, 250);
     return () => clearTimeout(timer);
-  }, [source, params, effects, setRendering, setResult]);
+  }, [source, params, effects, setRendering, setResult, setPreviewScaled]);
 
   // Alt+1..5 switches the right-rail tool.
   useEffect(() => {

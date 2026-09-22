@@ -32,6 +32,13 @@ function download(url: string, filename: string) {
   a.click();
 }
 
+function formatEta(ms: number): string {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  if (s < 60) return `about ${s}s left`;
+  const m = Math.floor(s / 60);
+  return `about ${m}m ${s % 60}s left`;
+}
+
 export default function Timeline() {
   const params = useApp((s) => s.params);
   const effects = useApp((s) => s.effects);
@@ -45,8 +52,14 @@ export default function Timeline() {
   const [doneCount, setDoneCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [phase, setPhase] = useState("");
+  const [etaMs, setEtaMs] = useState<number | null>(null);
+  const [shown, setShown] = useState(0); // interpolated 0..100 progress
   const [error, setError] = useState("");
   const cancelRef = useRef(false);
+  const frameStartRef = useRef(0);
+  const avgMsRef = useRef<number | null>(null);
+  const doneRef = useRef(0);
+  const totalRef = useRef(0);
   const frameRef = useRef<HTMLCanvasElement>(null);
   const previewSeq = useRef(0);
 
@@ -114,16 +127,36 @@ export default function Timeline() {
     setWorking(true);
     setError("");
     cancelRef.current = false;
+    let tick: ReturnType<typeof setInterval> | undefined;
     try {
       const snapshot = { ...params };
       const fx = stripKeys(useApp.getState().effects);
       const plan = planFrames(clip.info, range, fps, snapshot.method);
       setTotalCount(plan.times.length);
       setDoneCount(0);
+      setEtaMs(null);
+      setShown(0);
+      avgMsRef.current = null;
+      totalRef.current = plan.times.length;
+      doneRef.current = 0;
       const frames: ExportFrame[] = [];
+      const recent: number[] = [];
+      // Smooth the bar between frames: fill toward the next step using
+      // the rolling average frame cost instead of jumping per frame.
+      const tickId = setInterval(() => {
+        const avg = avgMsRef.current;
+        const total = totalRef.current;
+        if (avg === null || total === 0) return;
+        const elapsed = performance.now() - frameStartRef.current;
+        setShown(((doneRef.current + Math.min(0.999, elapsed / avg)) / total) * 100);
+      }, 150);
+      tick = tickId;
       for (let i = 0; i < plan.times.length; i++) {
-        if (cancelRef.current) throw new Error("cancelled");
+        if (cancelRef.current) {
+          throw new Error("cancelled");
+        }
         setPhase(`frame ${i + 1}/${plan.times.length}`);
+        frameStartRef.current = performance.now();
         const raw = await captureFrame(clip, plan.times[i], plan.width, plan.height);
         const copy = new Uint8ClampedArray(raw.data).buffer as ArrayBuffer;
         const res = await renderImage(
@@ -147,19 +180,33 @@ export default function Timeline() {
           height: res.height,
         });
         setDoneCount(i + 1);
+        doneRef.current = i + 1;
+        setShown(((i + 1) / plan.times.length) * 100);
+        const dt = performance.now() - frameStartRef.current;
+        avgMsRef.current = avgMsRef.current === null ? dt : avgMsRef.current * 0.7 + dt * 0.3;
+        recent.push(dt);
+        if (recent.length > 8) recent.shift();
+        if (recent.length >= 2) {
+          const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
+          setEtaMs(avg * (plan.times.length - (i + 1)));
+        }
       }
+      clearInterval(tick);
       setPhase("encoding…");
+      setEtaMs(null);
       const stem = fileName.replace(/\.[^.]+$/, "") || "clip";
       if (kind === "mp4") {
         const blob = await exportMp4(frames, plan.fps, (d, t) => {
           setDoneCount(d);
           setTotalCount(t);
+          setShown(t > 0 ? (d / t) * 100 : 0);
         });
         download(URL.createObjectURL(blob), `${stem}.dither.mp4`);
       } else {
         const blob = exportGif(frames, plan.fps, snapshot.palette, (d, t) => {
           setDoneCount(d);
           setTotalCount(t);
+          setShown(t > 0 ? (d / t) * 100 : 0);
         });
         download(URL.createObjectURL(blob), `${stem}.dither.gif`);
       }
@@ -168,6 +215,8 @@ export default function Timeline() {
     } catch (e) {
       setError(String(e));
       setPhase("");
+    } finally {
+      if (tick !== undefined) clearInterval(tick);
     }
     setWorking(false);
   }
@@ -276,9 +325,15 @@ export default function Timeline() {
                 </Button>
               )}
               {working && totalCount > 0 && (
-                <Progress value={(doneCount / totalCount) * 100} className="w-48" />
+                <>
+                  <Progress value={Math.min(100, shown)} className="w-48" />
+                  <Badge variant="secondary">
+                    {doneCount}/{totalCount}
+                    {etaMs !== null && doneCount < totalCount ? ` · ${formatEta(etaMs)}` : ""}
+                  </Badge>
+                </>
               )}
-              {phase && !error && <Badge variant="secondary">{phase}</Badge>}
+              {phase && !error && !working && <Badge variant="secondary">{phase}</Badge>}
             </div>
             {error && (
               <Alert variant="destructive">

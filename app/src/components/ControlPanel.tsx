@@ -20,6 +20,7 @@ export default function ControlPanel({ onFile }: { onFile: (f: File | undefined)
   const source = useApp((s) => s.source);
   const result = useApp((s) => s.result);
   const rendering = useApp((s) => s.rendering);
+  const previewScaled = useApp((s) => s.previewScaled);
   const setParams = useApp((s) => s.setParams);
 
   return (
@@ -111,7 +112,7 @@ export default function ControlPanel({ onFile }: { onFile: (f: File | undefined)
             : rendering
               ? "Rendering…"
               : result
-                ? `Done in ${result.ms.toFixed(1)} ms`
+                ? `Done in ${result.ms.toFixed(1)} ms${previewScaled ? " · preview scaled" : ""}`
                 : "Ready"}
         </Badge>
       </CardContent>

@@ -2,7 +2,7 @@
 // scans that need per-pixel weights, serpentine order, or row snapshots.
 
 import type { RGB } from "./palettes.js";
-import { quantizeBW, type GrayImage } from "./types.js";
+import { quantizeBW, type GrayImage, type RowProgress } from "./types.js";
 import { nearestLabIndex, paletteToLab, rgbToLab } from "./color.js";
 import { tileMatrix, DOT_CLASS } from "./matrices.js";
 
@@ -108,7 +108,12 @@ export const DIFFUSION_TABLES: Record<string, DiffusionTap[]> = {
  * Generic B&W error-diffusion. Unknown names fall back to Floyd-Steinberg.
  * Accumulator is unclamped; out-of-bounds taps are skipped. Returns 0/255.
  */
-export function diffuseBW(img: GrayImage, kernel: string, threshold = 128): Uint8Array {
+export function diffuseBW(
+  img: GrayImage,
+  kernel: string,
+  threshold = 128,
+  onRow?: RowProgress,
+): Uint8Array {
   const taps = DIFFUSION_TABLES[kernel] ?? DIFFUSION_TABLES["Floyd-Steinberg"];
   const { width: w, height: h } = img;
   const a = Float32Array.from(img.data);
@@ -126,6 +131,7 @@ export function diffuseBW(img: GrayImage, kernel: string, threshold = 128): Uint
         if (ny >= 0 && ny < h && nx >= 0 && nx < w) a[ny * w + nx] += e * wt;
       }
     }
+    onRow?.(y + 1, h, out, w, h);
   }
   return out;
 }
@@ -175,7 +181,7 @@ function clamp255(v: number): number {
 }
 
 /** Error shares picked per-pixel from the band of the current value. */
-export function ostromoukhovBW(img: GrayImage, threshold = 128): Uint8Array {
+export function ostromoukhovBW(img: GrayImage, threshold = 128, onRow?: RowProgress): Uint8Array {
   const { width: w, height: h } = img;
   const a = Float32Array.from(img.data);
   const out = new Uint8Array(w * h);
@@ -196,6 +202,7 @@ export function ostromoukhovBW(img: GrayImage, threshold = 128): Uint8Array {
         a[i + w] = clamp255(a[i + w] + (e * c2) / dn);
       }
     }
+    onRow?.(y + 1, h, out, w, h);
   }
   return out;
 }
@@ -205,7 +212,7 @@ export function ostromoukhovBW(img: GrayImage, threshold = 128): Uint8Array {
  * f = v/255, down-left uses (1-f). Border columns and the last row keep
  * their unquantized (clipped) values.
  */
-export function variableErrorBW(img: GrayImage, threshold = 128): Uint8Array {
+export function variableErrorBW(img: GrayImage, threshold = 128, onRow?: RowProgress): Uint8Array {
   const { width: w, height: h } = img;
   const a = Float32Array.from(img.data);
   const out = new Uint8Array(w * h);
@@ -230,10 +237,12 @@ export function variableErrorBW(img: GrayImage, threshold = 128): Uint8Array {
       a[y * w + 1 + k] = nw[k];
       done[y * w + 1 + k] = 1;
     }
+    onRow?.(y + 1, h, out, w, h);
   }
   for (let i = 0; i < w * h; i++) {
     if (!done[i]) out[i] = quantizeBW(clamp255(a[i]), threshold);
   }
+  onRow?.(h, h, out, w, h);
   return out;
 }
 
@@ -241,7 +250,7 @@ export function variableErrorBW(img: GrayImage, threshold = 128): Uint8Array {
  * Class-weighted rightward spread. The spread row is overwritten by the
  * quantized row, so the output equals a plain threshold by construction.
  */
-export function dotDiffusionBW(img: GrayImage, threshold = 128): Uint8Array {
+export function dotDiffusionBW(img: GrayImage, threshold = 128, onRow?: RowProgress): Uint8Array {
   const { width: w, height: h } = img;
   const a = Float32Array.from(img.data);
   const dc = tileMatrix(DOT_CLASS, h, w);
@@ -260,12 +269,13 @@ export function dotDiffusionBW(img: GrayImage, threshold = 128): Uint8Array {
       out[y * w + x] = nw[x];
       a[y * w + x] = nw[x];
     }
+    onRow?.(y + 1, h, out, w, h);
   }
   return out;
 }
 
 /** Serpentine scan with a 16-slot error queue (decay 1/16 per step). */
-export function riemersmaBW(img: GrayImage, threshold = 128): Uint8Array {
+export function riemersmaBW(img: GrayImage, threshold = 128, onRow?: RowProgress): Uint8Array {
   const { width: w, height: h } = img;
   const a = Float32Array.from(img.data);
   const out = new Uint8Array(w * h);
@@ -283,12 +293,16 @@ export function riemersmaBW(img: GrayImage, threshold = 128): Uint8Array {
       buf.shift();
       buf.push((old - nv) * decay);
     }
+    onRow?.(y + 1, h, out, w, h);
   }
   return out;
 }
 
 /** Special-scan dispatch (non-table kernels). */
-export const SPECIAL_DIFFUSION: Record<string, (img: GrayImage, t: number) => Uint8Array> = {
+export const SPECIAL_DIFFUSION: Record<
+  string,
+  (img: GrayImage, t: number, onRow?: RowProgress) => Uint8Array
+> = {
   Ostromoukhov: ostromoukhovBW,
   "Variable-Error": variableErrorBW,
   "Dot-Diffusion": dotDiffusionBW,
@@ -310,6 +324,7 @@ export function diffusePalette(
   height: number,
   palette: RGB[],
   method = "Floyd-Steinberg",
+  onRow?: RowProgress,
 ): Uint8ClampedArray {
   const taps = DIFFUSION_TABLES[method] ?? DIFFUSION_TABLES["Floyd-Steinberg"];
   const palLab = paletteToLab(palette);
@@ -338,6 +353,7 @@ export function diffusePalette(
         }
       }
     }
+    onRow?.(y + 1, height, out, width, height);
   }
   return out;
 }

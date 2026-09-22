@@ -165,4 +165,30 @@ describe("effect chains", () => {
       Array.from(src),
     );
   });
+
+  it("row hooks fire per row with dims and unchanged output", () => {
+    const src = pattern(10, 6);
+    const calls: Array<[number, number, number, number]> = [];
+    const withHook = applyEffects(
+      src,
+      10,
+      6,
+      [on("blur"), on("grain")],
+      (done, total, out, w, h) => {
+        calls.push([done, total, out.length, w]);
+        void h;
+      },
+    );
+    assert.deepEqual(
+      Array.from(withHook),
+      Array.from(applyEffects(src, 10, 6, [on("blur"), on("grain")])),
+    );
+    // Two effects x six rows each.
+    assert.equal(calls.length, 12);
+    assert.ok(calls.every(([, total, len, w]) => total === 6 && len === 10 * 6 * 4 && w === 10));
+    assert.deepEqual(
+      calls.map(([done]) => done),
+      [1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6],
+    );
+  });
 });

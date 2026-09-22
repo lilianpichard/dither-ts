@@ -2,7 +2,7 @@
 // downscale-dither-upscale (pixel size) and preview scaling.
 
 import { PALETTES, type RGB } from "./palettes.js";
-import { quantizeBW, type DitherOptions, type GrayImage } from "./types.js";
+import { quantizeBW, type DitherOptions, type GrayImage, type RowProgress } from "./types.js";
 import { DIFFUSION_TABLES, SPECIAL_DIFFUSION, diffuseBW, diffusePalette } from "./diffusion.js";
 import { MATRIX_METHODS, orderedBW, orderedPalette } from "./ordered.js";
 
@@ -69,9 +69,10 @@ export function upscaleBW(
 }
 
 /** Plain threshold without diffusion (fallback for unknown methods). */
-export function thresholdBW(img: GrayImage, threshold: number): Uint8Array {
+export function thresholdBW(img: GrayImage, threshold: number, onRow?: RowProgress): Uint8Array {
   const out = new Uint8Array(img.width * img.height);
   for (let i = 0; i < out.length; i++) out[i] = quantizeBW(img.data[i], threshold);
+  onRow?.(img.height, img.height, out, img.width, img.height);
   return out;
 }
 
@@ -84,6 +85,7 @@ export function ditherGray(img: GrayImage, options: DitherOptions = {}): Uint8Ar
   const method = options.method ?? "Floyd-Steinberg";
   const threshold = options.threshold ?? 128;
   const seed = options.seed ?? 0;
+  const onProgress = options.onProgress;
   const factor = effectivePixelSize(options.pixelSize, options.preview);
   const small = downscaleGray(img, factor);
   let out: Uint8Array;
@@ -92,14 +94,15 @@ export function ditherGray(img: GrayImage, options: DitherOptions = {}): Uint8Ar
     for (let i = 0; i < out.length; i++) {
       out[i] = Math.min(255, Math.max(0, Math.round(small.data[i])));
     }
+    onProgress?.(small.height, small.height, out, small.width, small.height);
   } else if (ORDERED_SET.has(method)) {
-    out = orderedBW(small, method, threshold, seed);
+    out = orderedBW(small, method, threshold, seed, onProgress);
   } else if (TABLE_SET.has(method)) {
-    out = diffuseBW(small, method, threshold);
+    out = diffuseBW(small, method, threshold, onProgress);
   } else if (SPECIAL_SET.has(method)) {
-    out = SPECIAL_DIFFUSION[method](small, threshold);
+    out = SPECIAL_DIFFUSION[method](small, threshold, onProgress);
   } else {
-    out = thresholdBW(small, threshold);
+    out = thresholdBW(small, threshold, onProgress);
   }
   return upscaleBW(out, small.width, small.height, img.width, img.height);
 }
@@ -165,13 +168,16 @@ export function ditherColor(
   const method = options.method ?? "Floyd-Steinberg";
   const palette = resolvePalette(options.palette ?? DEFAULT_PALETTE);
   const seed = options.seed ?? 0;
+  const onProgress = options.onProgress;
   const factor = effectivePixelSize(options.pixelSize, options.preview);
   const small = downscaleRGB(rgb, width, height, factor);
   if (method === "None") {
-    return upscaleRGB(small.data.slice(), small.w, small.h, width, height);
+    const out = upscaleRGB(small.data.slice(), small.w, small.h, width, height);
+    onProgress?.(height, height, out, width, height);
+    return out;
   }
   const out = ORDERED_SET.has(method)
-    ? orderedPalette(small.data, small.w, small.h, palette, method, seed)
-    : diffusePalette(small.data, small.w, small.h, palette, method);
+    ? orderedPalette(small.data, small.w, small.h, palette, method, seed, onProgress)
+    : diffusePalette(small.data, small.w, small.h, palette, method, onProgress);
   return upscaleRGB(out, small.w, small.h, width, height);
 }

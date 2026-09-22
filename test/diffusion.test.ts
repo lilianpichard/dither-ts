@@ -12,7 +12,7 @@ import {
 } from "../src/diffusion.js";
 import { thresholdBW } from "../src/pipeline.js";
 import { PALETTES } from "../src/palettes.js";
-import type { GrayImage } from "../src/types.js";
+import type { GrayImage, RowProgress } from "../src/types.js";
 
 function gray(values: number[], w: number, h: number): GrayImage {
   return { width: w, height: h, data: new Float32Array(values) };
@@ -195,5 +195,52 @@ describe("color diffusion", () => {
       Array.from(diffusePalette(redImage(), 4, 4, pal, "Nope")),
       Array.from(diffusePalette(redImage(), 4, 4, pal, "Floyd-Steinberg")),
     );
+  });
+});
+
+describe("row progress hooks", () => {
+  it("fires 1..h with matching dims and identical output", () => {
+    const img = fixture(9, 7);
+    const calls: Array<[number, number, number, number, number]> = [];
+    const withHook = diffuseBW(img, "Sierra", 128, (done, total, out, w, h) => {
+      calls.push([done, total, out.length, w, h]);
+    });
+    assert.deepEqual(
+      calls.map((c) => [c[0], c[1]]),
+      [
+        [1, 7],
+        [2, 7],
+        [3, 7],
+        [4, 7],
+        [5, 7],
+        [6, 7],
+        [7, 7],
+      ],
+    );
+    assert.ok(
+      calls.every(([, total, len, w, h]) => total === 7 && len === 9 * 7 && w === 9 && h === 7),
+    );
+    assert.deepEqual(Array.from(withHook), Array.from(diffuseBW(img, "Sierra", 128)));
+  });
+
+  it("fires on every kernel family member", () => {
+    const img = fixture(6, 5);
+    const fns: Array<(o?: RowProgress) => Uint8Array> = [
+      (o) => diffuseBW(img, "Floyd-Steinberg", 128, o),
+      (o) => ostromoukhovBW(img, 128, o),
+      (o) => variableErrorBW(img, 128, o),
+      (o) => dotDiffusionBW(img, 128, o),
+      (o) => riemersmaBW(img, 128, o),
+    ];
+    for (const fn of fns) {
+      let last = 0;
+      let total = 0;
+      fn((done, t) => {
+        last = done;
+        total = t;
+      });
+      assert.equal(last, total);
+      assert.ok(total > 0);
+    }
   });
 });

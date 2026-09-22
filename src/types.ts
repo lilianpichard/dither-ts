@@ -52,6 +52,19 @@ export const METHOD_NAMES: readonly string[] = [
 /** Palette reference: registered name or explicit color list. */
 export type PaletteRef = string | RGB[];
 
+/**
+ * Row progress hook: completed rows, total rows, live output buffer and
+ * its dimensions. Rows below `done` are final. The buffer is live memory:
+ * copy it synchronously if posts must outlive the call.
+ */
+export type RowProgress = (
+  done: number,
+  total: number,
+  out: Uint8Array | Uint8ClampedArray,
+  w: number,
+  h: number,
+) => void;
+
 /** Options for the single pipeline entry point. */
 export interface DitherOptions {
   method?: string;
@@ -63,4 +76,6 @@ export interface DitherOptions {
   preview?: boolean;
   /** Threshold-field shift for animated ordered variation (0 = unshifted). */
   seed?: number;
+  /** Called per completed row; rows below `done` are final. */
+  onProgress?: RowProgress;
 }

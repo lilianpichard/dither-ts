@@ -23,6 +23,8 @@ export interface RenderResult {
   pixels: ArrayBuffer; // RGBA
   ms: number;
   jobId: number;
+  /** Streaming partial: paints but keeps the spinner until the final frame. */
+  partial?: boolean;
 }
 
 interface AppState {
@@ -31,10 +33,12 @@ interface AppState {
   effects: StackedEffect[];
   result: RenderResult | null;
   rendering: boolean;
+  previewScaled: boolean;
   setSource: (s: ImageSource | null) => void;
   setParams: (p: Partial<DitherParams>) => void;
   setResult: (r: RenderResult | null) => void;
   setRendering: (b: boolean) => void;
+  setPreviewScaled: (b: boolean) => void;
   setEffects: (e: StackedEffect[]) => void;
   addEffect: (type: string) => void;
   removeEffect: (index: number) => void;
@@ -63,10 +67,13 @@ export const useApp = create<AppState>()((set) => ({
   effects: [],
   result: null,
   rendering: false,
+  previewScaled: false,
   setSource: (source) => set({ source, result: null }),
   setParams: (p) => set((s) => ({ params: { ...s.params, ...p } })),
-  setResult: (result) => set({ result, rendering: false }),
+  setResult: (result) =>
+    set((s) => ({ result, rendering: result?.partial === true ? s.rendering : false })),
   setRendering: (rendering) => set({ rendering }),
+  setPreviewScaled: (previewScaled) => set({ previewScaled }),
   setEffects: (effects) => set({ effects }),
   addEffect: (type) =>
     set((s) => ({

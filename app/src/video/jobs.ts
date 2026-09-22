@@ -19,6 +19,24 @@ export interface FramePlan {
 
 export const MAX_DIFFUSION_DIM = 720;
 export const MAX_ORDERED_DIM = 1080;
+/** Still-preview cap for heavy diffusion scans. */
+export const MAX_HEAVY_PREVIEW_DIM = 720;
+
+/** Wide-spread or stateful scans too slow for full-res still previews. */
+export const HEAVY_METHODS: readonly string[] = [
+  "Stevenson-Arce",
+  "Jarvis-Judice-Ninke",
+  "Stucki",
+  "Ostromoukhov",
+  "Variable-Error",
+  "Dot-Diffusion",
+  "Riemersma",
+];
+
+/** True for methods needing the preview cap above their native size. */
+export function isHeavyMethod(method: string): boolean {
+  return HEAVY_METHODS.includes(method);
+}
 
 /** True for methods fast enough to run at full HD. */
 export function isOrderedMethod(method: string): boolean {

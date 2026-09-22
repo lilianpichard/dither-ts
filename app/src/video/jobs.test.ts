@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitSize, isOrderedMethod, planFrames } from "./jobs";
+import { fitSize, isHeavyMethod, isOrderedMethod, planFrames } from "./jobs";
 
 describe("frame planner", () => {
   it("classifies ordered vs diffusion methods", () => {
@@ -9,6 +9,13 @@ describe("frame planner", () => {
     expect(isOrderedMethod("None")).toBe(true);
     expect(isOrderedMethod("Floyd-Steinberg")).toBe(false);
     expect(isOrderedMethod("Riemersma")).toBe(false);
+  });
+
+  it("flags heavy scans for preview caps", () => {
+    expect(isHeavyMethod("Riemersma")).toBe(true);
+    expect(isHeavyMethod("Stevenson-Arce")).toBe(true);
+    expect(isHeavyMethod("Floyd-Steinberg")).toBe(false);
+    expect(isHeavyMethod("Bayer 4x4")).toBe(false);
   });
 
   it("keeps small clips at native size", () => {

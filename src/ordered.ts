@@ -4,7 +4,7 @@
 // ordered uses a fixed 0.3 gain with RGB nearest-color matching.
 
 import type { RGB } from "./palettes.js";
-import { quantizeBW, type GrayImage } from "./types.js";
+import { quantizeBW, type GrayImage, type RowProgress } from "./types.js";
 import { nearestRGBIndex } from "./color.js";
 import { BAYER_4x4, ORDERED_MATRICES, blueNoiseMask, crosshatchField } from "./matrices.js";
 
@@ -34,6 +34,7 @@ export function orderedBW(
   method = "Bayer 4x4",
   threshold = 128,
   seed = 0,
+  onRow?: RowProgress,
 ): Uint8Array {
   const { width: w, height: h } = img;
   const field = orderedField(method, w, h);
@@ -49,6 +50,7 @@ export function orderedBW(
         threshold,
       );
     }
+    onRow?.(y + 1, h, out, w, h);
   }
   return out;
 }
@@ -68,6 +70,7 @@ export function orderedPalette(
   palette: RGB[],
   method = "Bayer 4x4",
   seed = 0,
+  onRow?: RowProgress,
 ): Uint8ClampedArray {
   const field = orderedField(method, width, height);
   const ox = seed % 64;
@@ -85,6 +88,7 @@ export function orderedPalette(
       out[i * 3 + 1] = p[1];
       out[i * 3 + 2] = p[2];
     }
+    onRow?.(y + 1, height, out, width, height);
   }
   return out;
 }
