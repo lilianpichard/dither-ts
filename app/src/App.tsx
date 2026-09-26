@@ -8,7 +8,6 @@ import { requestOperations, scaleOperations } from "./image/settings";
 import { MAX_HEAVY_PREVIEW_DIM, fitSize, isHeavyMethod } from "./video/jobs";
 import CanvasViewport from "./components/CanvasViewport";
 import ControlPanel from "./components/ControlPanel";
-import { ImageDropzone } from "./components/ImageDropzone";
 import ToolsPanel, { TOOL_IDS, type ToolId } from "./components/ToolsPanel";
 import { TopBar } from "./components/TopBar";
 import { Button } from "@/components/ui/button";
@@ -63,6 +62,7 @@ export default function App() {
   const [tool, setTool] = useState<ToolId>("presets");
   const fileSequence = useRef(0);
   const renderAbort = useRef<AbortController | null>(null);
+  const pickerRef = useRef<HTMLInputElement>(null);
   const status = useMemo(
     () =>
       describeRenderStatus({
@@ -215,16 +215,16 @@ export default function App() {
   const shown = preview ?? result;
 
   return (
-    <main className="flex h-svh flex-col overflow-hidden bg-background">
+    <main className="flex min-h-svh flex-col overflow-x-clip bg-background lg:h-svh lg:overflow-hidden">
       <TopBar />
       {/* Toasts own failures; this region only speaks render status. */}
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {status}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="flex flex-1 flex-col lg:min-h-0 lg:flex-row">
         <ControlPanel onFile={(file) => void onFile(file)} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3">
-          <section className="relative flex min-h-64 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-canvas">
+          <section className="relative flex min-h-64 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-canvas lg:min-h-0 lg:flex-3">
             {source && shown ? (
               <>
                 <CanvasViewport source={source} result={shown} />
@@ -240,18 +240,26 @@ export default function App() {
                   <EmptyDescription>Choose a file to start dithering.</EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
+                  {/* Board C01: 262x42 raised button, label 10px/700. */}
                   <Button
                     size="xl"
-                    variant="outline"
-                    className="w-64"
-                    onClick={() => setTool("presets")}
+                    variant="secondary"
+                    className="w-65.5"
+                    onClick={() => pickerRef.current?.click()}
                   >
                     Choose an image
                   </Button>
-                  <ImageDropzone
-                    onFile={(file) => void onFile(file)}
-                    className="hidden max-w-64"
-                    label="Choose an image"
+                  <input
+                    ref={pickerRef}
+                    type="file"
+                    accept="image/*"
+                    tabIndex={-1}
+                    aria-hidden
+                    className="hidden"
+                    onChange={(e) => {
+                      void onFile(e.target.files?.[0]);
+                      e.currentTarget.value = "";
+                    }}
                   />
                 </EmptyContent>
               </Empty>

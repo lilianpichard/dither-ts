@@ -78,22 +78,20 @@ function useSource() {
   return useApp((s) => s.source);
 }
 
-/** Loaded-source chip: miniature, file name, and pixel dimensions. */
+/**
+ * Source control. Stays a live dropzone once a file is loaded — it shows the
+ * miniature, the file name and the dimensions, and still opens the picker or
+ * accepts a drop, so another image can always be loaded without a reload.
+ */
 function SourceChip({ onFile }: { onFile: (f: File | undefined) => void }) {
   const source = useSource();
-  if (!source) {
-    return <ImageDropzone onFile={(f) => onFile(f)} className="w-full" />;
-  }
   return (
-    <div className="flex w-full items-center gap-2 rounded-lg border border-border bg-raised px-2 py-1.5">
-      <SourceThumb source={source} />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-body font-bold text-foreground">{source.name}</span>
-        <span className="text-caption text-muted-foreground">
-          {source.width}×{source.height}
-        </span>
-      </span>
-    </div>
+    <ImageDropzone
+      onFile={(f) => onFile(f)}
+      className="w-full"
+      fileName={source?.name}
+      leading={source ? <SourceThumb source={source} /> : undefined}
+    />
   );
 }
 
@@ -117,7 +115,7 @@ export default function ControlPanel({ onFile }: { onFile: (f: File | undefined)
   const methodIndex = METHOD_NAMES.indexOf(params.method) + 1;
 
   return (
-    <aside className="flex w-full shrink-0 flex-col gap-3 overflow-x-hidden overflow-y-auto border-r border-border bg-background scrollbar-slim p-3 lg:h-full lg:w-43">
+    <aside className="flex w-full flex-col gap-3 overflow-x-hidden border-r border-border bg-background scrollbar-slim p-3 lg:h-full lg:w-56 lg:min-h-0 lg:shrink-0 lg:overflow-y-auto xl:w-64">
       <Field label="Source" accent>
         <SourceChip onFile={onFile} />
       </Field>

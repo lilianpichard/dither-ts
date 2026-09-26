@@ -15,6 +15,8 @@ interface ImageDropzoneProps {
   busyLabel?: string;
   label?: string;
   hint?: string;
+  /** Miniature shown before the icon, e.g. a thumbnail of the loaded source. */
+  leading?: React.ReactNode;
   className?: string;
 }
 
@@ -32,6 +34,7 @@ export function ImageDropzone({
   busyLabel = "Loading…",
   label = "Choose an image",
   hint = "Click or drop a file",
+  leading,
   className,
 }: ImageDropzoneProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -58,6 +61,7 @@ export function ImageDropzone({
 
   return (
     <div
+      className={cn("w-full", className)}
       onDragEnter={(e) => {
         e.preventDefault();
         if (inactive) return;
@@ -91,21 +95,29 @@ export function ImageDropzone({
           "flex h-11.5 w-full cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-raised px-2.5 text-left transition-colors",
           dragging ? "border-ring bg-accent" : "hover:bg-accent",
           inactive && "cursor-not-allowed opacity-60 hover:bg-raised",
-          className,
         )}
       >
-        <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
-          {busy ? (
+        <span
+          className={cn(
+            "flex shrink-0 items-center justify-center text-muted-foreground",
+            leading ? "w-11" : "size-4",
+          )}
+        >
+          {leading ?? (busy ? (
             <Loader2 className="size-3.5 animate-spin" />
           ) : (
             <Upload className={cn("size-3.5", dragging && "animate-bounce text-foreground")} />
-          )}
+          ))}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-body font-bold text-foreground">
             {busy ? busyLabel : dragging ? "Drop the image" : (fileName ?? label)}
           </span>
-          {!busy && <span className="block truncate text-label text-muted-foreground">{hint}</span>}
+          {!busy && (
+            <span className="block truncate text-label text-muted-foreground">
+              {fileName ? "Click or drop to replace" : hint}
+            </span>
+          )}
         </span>
       </button>
       <input

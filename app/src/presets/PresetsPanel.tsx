@@ -164,7 +164,7 @@ export default function PresetsPanel() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-full flex-col gap-3">
+      <div className="@container flex h-full min-h-0 flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Input
             value={name}
@@ -210,7 +210,7 @@ export default function PresetsPanel() {
             </EmptyHeader>
           </Empty>
         ) : (
-          <div className="flex flex-wrap gap-3">
+          <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 @lg:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4">
             {sorted.map((item) => {
               const key = thumbKey(item.id, item.preset);
               const url = thumbs.get(key);
@@ -260,11 +260,11 @@ export default function PresetsPanel() {
               return (
                 <figure
                   key={item.id}
-                  className="m-0 flex w-full max-w-175 gap-3 rounded-lg border border-border bg-raised p-3.5"
+                  className="m-0 flex min-w-0 gap-2 rounded-lg border border-border bg-raised p-2"
                 >
                   <button
                     type="button"
-                    className="h-45 w-60 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border bg-canvas p-0 focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
+                    className="h-13.5 w-18 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border bg-canvas p-0 focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
                     title={`Apply ${item.preset.name}`}
                     onClick={() => {
                       applyPreset(item.preset);
@@ -283,21 +283,21 @@ export default function PresetsPanel() {
                     )}
                   </button>
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <h3 className="truncate text-card text-foreground">{item.preset.name}</h3>
-                    <p className="mt-1 text-label text-muted-foreground uppercase">
+                    <h3 className="truncate text-card-title text-foreground">{item.preset.name}</h3>
+                    <p className="mt-0.5 line-clamp-2 text-label text-muted-foreground uppercase">
                       {item.preset.params.method} · threshold {item.preset.params.threshold} · pixel{" "}
                       {item.preset.params.pixelSize}
                     </p>
-                    <p className="mt-0.5 text-label text-muted-foreground uppercase">
+                    <p className="mt-0.5 truncate text-label text-muted-foreground uppercase">
                       {item.favorite ? "Favorite · " : ""}
                       {describeAge(item.createdAt)}
                     </p>
-                    <div className="mt-auto flex items-end gap-2 pt-3">
+                    <div className="mt-auto flex flex-wrap items-center gap-1 pt-2">
                       {actions.map((a) => (
                         <Tooltip key={a.key}>
                           <TooltipTrigger asChild>
                             <Button
-                              size="icon-action"
+                              size="icon-xs"
                               variant={
                                 a.key === "favorite" && item.favorite ? "accent" : "secondary"
                               }
@@ -309,16 +309,6 @@ export default function PresetsPanel() {
                           </TooltipTrigger>
                           <TooltipContent>{a.label}</TooltipContent>
                         </Tooltip>
-                      ))}
-                    </div>
-                    <div className="mt-1 flex items-end gap-2" aria-hidden>
-                      {actions.map((a) => (
-                        <span
-                          key={a.key}
-                          className="w-8 text-center text-caption text-muted-foreground"
-                        >
-                          {a.label}
-                        </span>
                       ))}
                     </div>
                   </div>

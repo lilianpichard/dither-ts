@@ -139,10 +139,10 @@
   --text-display-sm--line-height: 1.2;
   --text-display-sm--letter-spacing: -0.022em;
   --text-display-sm--font-weight: 800;
-  --text-card: 0.875rem;
-  --text-card--line-height: 1.2;
-  --text-card--letter-spacing: -0.014em;
-  --text-card--font-weight: 700;
+  --text-card-title: 0.875rem;
+  --text-card-title--line-height: 1.2;
+  --text-card-title--letter-spacing: -0.014em;
+  --text-card-title--font-weight: 700;
   --text-title: 0.75rem;
   --text-title--line-height: 1.2;
   --text-title--letter-spacing: 0.033em;

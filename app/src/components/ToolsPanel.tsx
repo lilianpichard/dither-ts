@@ -42,7 +42,7 @@ export default function ToolsPanel({
     <Tabs
       value={tool}
       onValueChange={(v) => onTool(v as ToolId)}
-      className="flex max-h-1/2 shrink-0 flex-col"
+      className="flex max-h-1/2 shrink-0 flex-col lg:max-h-none lg:flex-2"
     >
       <ConsoleShell title={active.title} meta={meta || undefined}>
         <ConsoleMetaContext.Provider value={{ tool, publish: (_owner, value) => setMeta(value) }}>
