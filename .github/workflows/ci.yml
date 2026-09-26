@@ -39,6 +39,12 @@ jobs:
       # --no-sandbox: runners lack the SUID sandbox helper setup.
       - run: npm --prefix electron exec -- electron --no-sandbox --version
       - name: Package and smoke the desktop app
+        # electron-builder ships chrome-sandbox without the setuid bit, and
+        # Electron aborts at startup rather than falling back to no-sandbox, so
+        # the packaged app needs the same escape hatch the version check above
+        # uses. Opt-in via the env var, so real installs keep the sandbox.
+        env:
+          DITHER_SMOKE_ARGS: --no-sandbox
         run: |
           if command -v xvfb-run >/dev/null 2>&1; then
             xvfb-run -a npm --prefix electron run smoke
