@@ -10,6 +10,8 @@ export interface SavedPreset {
   id: string;
   favorite: boolean;
   preset: Preset;
+  /** Epoch ms the entry was added; absent on galleries saved before this field. */
+  createdAt?: number;
 }
 
 /** Result of adding presets from JSON: what landed, and every warning raised. */
@@ -36,6 +38,12 @@ const STORAGE_KEY = "dither-ts.presets.v1";
 
 function uid(): string {
   return `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
+}
+
+/** Accepts a finite epoch only, so a tampered entry cannot render "Invalid Date". */
+function readCreatedAt(entry: unknown): number | undefined {
+  const value = (entry as { createdAt?: unknown } | null)?.createdAt;
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 function persist(items: SavedPreset[]): void {
@@ -117,6 +125,7 @@ export const usePresets = create<PresetStore>()((set, get) => ({
               : uid(),
           favorite: (entry as { favorite: unknown }).favorite === true,
           preset,
+          createdAt: readCreatedAt(entry),
         });
       }
       set({ items });
@@ -132,6 +141,7 @@ export const usePresets = create<PresetStore>()((set, get) => ({
         id: uid(),
         favorite: false,
         preset: paramsToPreset(name, params, stripKeys(effects), operations),
+        createdAt: Date.now(),
       },
     ];
     persist(items);
@@ -163,6 +173,7 @@ export const usePresets = create<PresetStore>()((set, get) => ({
         id: uid(),
         favorite: false,
         preset: { ...found.preset, name: `${found.preset.name} copy` },
+        createdAt: Date.now(),
       },
     ];
     persist(items);
@@ -171,7 +182,7 @@ export const usePresets = create<PresetStore>()((set, get) => ({
   importJson: (text, nameHint) => {
     const { preset, warnings } = parsePresetJson(text, nameHint);
     if (!preset) return { added: 0, warnings };
-    const items = [...get().items, { id: uid(), favorite: false, preset }];
+    const items = [...get().items, { id: uid(), favorite: false, preset, createdAt: Date.now() }];
     persist(items);
     set({ items });
     return { added: 1, warnings };
@@ -183,7 +194,7 @@ export const usePresets = create<PresetStore>()((set, get) => ({
     for (const { preset, warnings: entryWarnings } of loadCatalog()) {
       if (existing.has(preset.name)) continue;
       existing.add(preset.name);
-      fresh.push({ id: uid(), favorite: false, preset });
+      fresh.push({ id: uid(), favorite: false, preset, createdAt: Date.now() });
       warnings.push(...entryWarnings);
     }
     if (fresh.length > 0) {

@@ -41,6 +41,11 @@ export default defineConfig({
   // and file:// (Electron loadFile).
   base: "./",
   plugins: [react(), tailwindcss(), devCsp()],
-  resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      "dither-ts/assets": fileURLToPath(new URL("../assets", import.meta.url)),
+    },
+  },
   worker: { format: "es" },
 });

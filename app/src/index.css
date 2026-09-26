@@ -1,48 +1,98 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/figtree";
 
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --background: #f5f3ec;
+  --foreground: #222222;
+  --card: #ffffff;
+  --card-foreground: #222222;
+  --popover: #ffffff;
+  --popover-foreground: #222222;
+  --primary: #ffaa00;
+  --primary-foreground: #222222;
+  --secondary: #ffffff;
+  --secondary-foreground: #222222;
+  --muted: #efede4;
+  --muted-foreground: #6b6c66;
+  --accent: #efede4;
+  --accent-foreground: #222222;
+  --destructive: #e5484d;
+  --border: #dad7cb;
+  --input: #dad7cb;
+  --ring: #ffaa00;
+  --chart-1: #ffaa00;
+  --chart-2: #6b6c66;
+  --chart-3: #8a8577;
+  --chart-4: #cfcbb9;
+  --chart-5: #dad7cb;
+  --radius: 0.5rem;
+  --sidebar: #f5f3ec;
+  --sidebar-foreground: #222222;
+  --sidebar-primary: #ffaa00;
+  --sidebar-primary-foreground: #222222;
+  --sidebar-accent: #efede4;
+  --sidebar-accent-foreground: #222222;
+  --sidebar-border: #dad7cb;
+  --sidebar-ring: #ffaa00;
+  /* Recessed stage behind the artwork, distinct from the card surface. */
+  --canvas: #efede4;
+  /* Raised controls: buttons, inputs, the source chip. */
+  --raised: #ffffff;
+  /* Slider and switch track, lighter than the border colour. */
+  --track: #cfcbb9;
+  /* Amber tuned for text on cream; the raw accent is too pale to read. */
+  --accent-label: #8a6a00;
+  --thumb-ring: #8a8577;
+}
+
+.dark {
+  --background: #0e0e0e;
+  --foreground: #f5f3ec;
+  --card: #1a1a1a;
+  --card-foreground: #f5f3ec;
+  --popover: #242424;
+  --popover-foreground: #f5f3ec;
+  --primary: #ffaa00;
+  --primary-foreground: #0e0e0e;
+  --secondary: #242424;
+  --secondary-foreground: #f5f3ec;
+  --muted: #141414;
+  --muted-foreground: #9a9c94;
+  --accent: #242424;
+  --accent-foreground: #f5f3ec;
+  --destructive: #e5484d;
+  --border: #3a3a3a;
+  --input: #3a3a3a;
+  --ring: #ffaa00;
+  --chart-1: #ffaa00;
+  --chart-2: #9a9c94;
+  --chart-3: #6e6e6e;
+  --chart-4: #4a4a4a;
+  --chart-5: #3a3a3a;
+  --sidebar: #0e0e0e;
+  --sidebar-foreground: #f5f3ec;
+  --sidebar-primary: #ffaa00;
+  --sidebar-primary-foreground: #0e0e0e;
+  --sidebar-accent: #242424;
+  --sidebar-accent-foreground: #f5f3ec;
+  --sidebar-border: #3a3a3a;
+  --sidebar-ring: #ffaa00;
+  --canvas: #141414;
+  --raised: #242424;
+  --track: #4a4a4a;
+  --accent-label: #ffaa00;
+  --thumb-ring: #6e6e6e;
 }
 
 @theme inline {
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-sans);
-  --font-sans: "Geist Variable", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -74,58 +124,87 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --color-canvas: var(--canvas);
+  --color-raised: var(--raised);
+  --color-track: var(--track);
+  --color-accent-label: var(--accent-label);
+  --color-thumb-ring: var(--thumb-ring);
+
+  /* Type scale from the charte: role, weight, tracking, size. */
+  --text-display: 1.25rem;
+  --text-display--line-height: 1.2;
+  --text-display--letter-spacing: -0.02em;
+  --text-display--font-weight: 800;
+  --text-display-sm: 1.125rem;
+  --text-display-sm--line-height: 1.2;
+  --text-display-sm--letter-spacing: -0.022em;
+  --text-display-sm--font-weight: 800;
+  --text-card: 0.875rem;
+  --text-card--line-height: 1.2;
+  --text-card--letter-spacing: -0.014em;
+  --text-card--font-weight: 700;
+  --text-title: 0.75rem;
+  --text-title--line-height: 1.2;
+  --text-title--letter-spacing: 0.033em;
+  --text-title--font-weight: 700;
+  --text-title-sm: 0.8125rem;
+  --text-title-sm--line-height: 1.2;
+  --text-title-sm--letter-spacing: 0.03em;
+  --text-title-sm--font-weight: 800;
+  --text-body: 0.625rem;
+  --text-body--line-height: 1.35;
+  --text-body--font-weight: 500;
+  --text-body-lg: 0.6875rem;
+  --text-body-lg--line-height: 1.35;
+  --text-body-lg--font-weight: 500;
+  --text-label: 0.5625rem;
+  --text-label--line-height: 1.2;
+  --text-label--letter-spacing: 0.056em;
+  --text-label--font-weight: 600;
+  --text-caption: 0.5625rem;
+  --text-caption--line-height: 1.2;
+  --text-caption--letter-spacing: 0.022em;
+  --text-caption--font-weight: 400;
+  --text-button: 0.5625rem;
+  --text-button--line-height: 1.2;
+  --text-button--letter-spacing: 0.044em;
+  --text-button--font-weight: 700;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+  --radius-2xl: 0.75rem;
+  --radius-3xl: 0.875rem;
+  --radius-4xl: 1rem;
+
+  /* Shell metrics: 40px grid, 44 top bar, 172 rail, 56 dock. */
+  --spacing: 0.25rem;
+  --breakpoint-xs: 30rem;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+/* Thin rail scrollbar: a token-based utility, not a per-call arbitrary value. */
+@utility scrollbar-slim {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01";
+  }
+  /* The canvas is a bitmap stage: never let the browser smooth the dots. */
+  canvas {
+    image-rendering: pixelated;
   }
   /* Honour the OS motion preference: keep state changes, drop the movement. */
   @media (prefers-reduced-motion: reduce) {

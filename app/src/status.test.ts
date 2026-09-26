@@ -5,7 +5,7 @@ const idle = { hasSource: true, rendering: false, ms: null, previewScaled: false
 
 describe("render status", () => {
   it("names the empty state instead of leaving the line blank", () => {
-    expect(describeRenderStatus({ ...idle, hasSource: false })).toBe("No image loaded");
+    expect(describeRenderStatus({ ...idle, hasSource: false })).toBe("No image");
   });
 
   it("announces progress and clears it once the result lands", () => {
@@ -16,7 +16,7 @@ describe("render status", () => {
 
   it("mentions a scaled preview only when the preview was capped", () => {
     expect(describeRenderStatus({ ...idle, ms: 4, previewScaled: true })).toBe(
-      "Done in 4.0 ms · preview scaled",
+      "Done in 4.0 ms · scaled",
     );
   });
 

@@ -20,11 +20,11 @@ import { canOpenFiles } from "../desktop/bridge";
 import { openFailure, openFiles } from "../desktop/files";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Files, FolderOpen, X } from "lucide-react";
+import { X } from "lucide-react";
+import { useConsoleMeta } from "../components/consoleMeta";
 
 /** One worker scope for the whole run, so cancelling kills the file in flight. */
 const BATCH_SCOPE = "batch";
@@ -179,98 +179,94 @@ export default function BatchPanel() {
   const done = settledCount(items.map((it) => it.status));
   const live = announceProgress({ label: "Batch", running, done, total: items.length });
   const eta = running && done < items.length ? formatEta(etaMs) : "";
+  useConsoleMeta("batch", running ? `${done}/${items.length}` : `${items.length} items`);
 
   return (
-    <Card className="overflow-y-auto lg:h-full">
-      <CardHeader>
-        <CardTitle>Batch</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          {canOpen ? (
-            <Button variant="secondary" disabled={running} onClick={() => void onAddImages()}>
-              <Files /> Add images
-            </Button>
-          ) : (
-            <Input
-              type="file"
-              accept="image/*"
-              multiple
-              aria-label="Batch images"
-              className="w-full max-w-64"
-              disabled={running}
-              onChange={(e) => {
-                const files = [...(e.target.files ?? [])];
-                if (files.length) void run(files);
-                e.target.value = "";
-              }}
-            />
-          )}
-          {canPickDir && (
-            <Button variant="secondary" disabled={running} onClick={() => void onChooseFolder()}>
-              <FolderOpen /> Output folder
-            </Button>
-          )}
-          {target && (
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled={running}
-              aria-label="Save each file separately instead"
-              onClick={() => setTarget(null)}
-            >
-              <X />
-            </Button>
-          )}
-          <Badge aria-hidden variant="secondary">
-            {running
-              ? `${done}/${items.length}${eta ? ` · ${eta}` : ""}`
-              : `Saving to ${sink.label}`}
-          </Badge>
-          {running && (
-            <Button variant="destructive" onClick={cancel}>
-              Cancel
-            </Button>
-          )}
-        </div>
-        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-          {live}
-        </div>
-        {items.length > 0 && (
-          <>
-            <Progress aria-label="Batch progress" value={done} max={items.length} />
-            <ul aria-busy={running} className="flex flex-col gap-1 text-sm">
-              {items.map((it, i) => (
-                <li key={i}>
-                  <Badge
-                    variant={
-                      it.status === "done"
-                        ? "default"
-                        : it.status === "error"
-                          ? "destructive"
-                          : "secondary"
-                    }
-                  >
-                    {it.status}
-                  </Badge>{" "}
-                  {it.name}
-                  {it.detail ? ` (${it.detail})` : ""}
-                </li>
-              ))}
-            </ul>
-          </>
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {canOpen ? (
+          <Button variant="secondary" disabled={running} onClick={() => void onAddImages()}>
+            Add images
+          </Button>
+        ) : (
+          <Input
+            type="file"
+            accept="image/*"
+            multiple
+            aria-label="Batch images"
+            className="w-full max-w-64"
+            disabled={running}
+            onChange={(e) => {
+              const files = [...(e.target.files ?? [])];
+              if (files.length) void run(files);
+              e.target.value = "";
+            }}
+          />
         )}
-        {items.length === 0 && (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>No batch yet</EmptyTitle>
-              <EmptyDescription>
-                Select multiple images to render each with the current settings.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+        {canPickDir && (
+          <Button variant="secondary" disabled={running} onClick={() => void onChooseFolder()}>
+            Output folder
+          </Button>
         )}
-      </CardContent>
-    </Card>
+        {target && (
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={running}
+            aria-label="Save each file separately instead"
+            onClick={() => setTarget(null)}
+          >
+            <X />
+          </Button>
+        )}
+        <Badge aria-hidden variant="secondary">
+          {running ? `${done}/${items.length}${eta ? ` · ${eta}` : ""}` : `Saving to ${sink.label}`}
+        </Badge>
+        {running && (
+          <Button variant="destructive" onClick={cancel}>
+            Cancel
+          </Button>
+        )}
+      </div>
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {live}
+      </div>
+      {items.length > 0 && (
+        <>
+          <Progress aria-label="Batch progress" value={done} max={items.length} />
+          <ul aria-busy={running} className="flex flex-col gap-1">
+            {items.map((it, i) => (
+              <li key={i} className="flex items-center gap-2">
+                <Badge
+                  variant={
+                    it.status === "done"
+                      ? "default"
+                      : it.status === "error"
+                        ? "destructive"
+                        : "secondary"
+                  }
+                >
+                  {it.status}
+                </Badge>
+                <span className="truncate text-body text-foreground">{it.name}</span>
+                {it.detail && (
+                  <span className="truncate text-caption text-muted-foreground">{it.detail}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {items.length === 0 && (
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No batch yet</EmptyTitle>
+            <EmptyDescription>
+              Select multiple images to render each with the current settings.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      )}
+    </div>
   );
 }

@@ -8,7 +8,6 @@ import { applyPreset, usePresets } from "./store";
 import type { Preset } from "./schema";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogClose,
@@ -22,7 +21,22 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Copy, Download, Library, Pencil, Star, Trash2, Upload } from "lucide-react";
+import { Copy, Download, Pencil, Star, Trash2 } from "lucide-react";
+import { useConsoleMeta } from "../components/consoleMeta";
+
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+/** "just now" / "12m ago" / "3h ago" / "5d ago", matching the card's meta line. */
+export function describeAge(stamp: number | undefined, now: number = Date.now()): string {
+  if (stamp === undefined || !Number.isFinite(stamp)) return "Saved";
+  const elapsed = Math.max(0, now - stamp);
+  if (elapsed < MINUTE) return "just now";
+  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)}m ago`;
+  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)}h ago`;
+  return `${Math.floor(elapsed / DAY)}d ago`;
+}
 
 function thumbKey(id: string, preset: Preset): string {
   return `${id}:${JSON.stringify(preset)}`;
@@ -146,177 +160,197 @@ export default function PresetsPanel() {
   }
 
   const sorted = [...items].sort((a, b) => Number(b.favorite) - Number(a.favorite));
+  useConsoleMeta("presets", sorted.length === 1 ? "1 saved" : `${sorted.length} saved`);
 
   return (
     <TooltipProvider>
-      <Card className="overflow-y-auto lg:h-full">
-        <CardHeader>
-          <CardTitle>Presets</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <Input
-              value={name}
-              placeholder="Preset name"
-              aria-label="Preset name"
-              className="w-52"
-              onChange={(e) => setName(e.target.value)}
-            />
-            <Button
-              onClick={() => {
-                saveCurrent(name.trim() || "Untitled", params);
-                setName("");
-                toast.success("Preset saved");
-              }}
-            >
-              Save current
-            </Button>
-            <Button variant="secondary" onClick={() => importRef.current?.click()}>
-              <Upload /> Import JSON
-            </Button>
-            <Button variant="secondary" onClick={onInstallCatalog}>
-              <Library /> Add originals
-            </Button>
-            <Input
-              ref={importRef}
-              type="file"
-              accept="application/json,.json"
-              hidden
-              onChange={(e) => void onImportFile(e.target.files?.[0])}
-            />
-          </div>
-          {notice && (
-            <Alert variant={notice.ok ? "default" : "destructive"}>
-              <AlertTitle>{notice.ok ? "Import" : "Import failed"}</AlertTitle>
-              <AlertDescription>{notice.text}</AlertDescription>
-            </Alert>
-          )}
-          {sorted.length === 0 ? (
-            <Empty>
-              <EmptyHeader>
-                <EmptyTitle>No presets yet</EmptyTitle>
-                <EmptyDescription>Save the current settings to start the gallery.</EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : (
-            <div className="flex flex-wrap gap-3">
-              {sorted.map((item) => (
-                <figure key={item.id} className="m-0 w-32">
+      <div className="flex h-full flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            value={name}
+            placeholder="Preset name"
+            aria-label="Preset name"
+            className="w-37.5"
+            onChange={(e) => setName(e.target.value)}
+          />
+          <Button
+            onClick={() => {
+              saveCurrent(name.trim() || "Untitled", params);
+              setName("");
+              toast.success("Preset saved");
+            }}
+          >
+            Save current
+          </Button>
+          <Button variant="secondary" onClick={() => importRef.current?.click()}>
+            Import JSON
+          </Button>
+          <Button variant="secondary" onClick={onInstallCatalog}>
+            Add originals
+          </Button>
+          <Input
+            ref={importRef}
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={(e) => void onImportFile(e.target.files?.[0])}
+          />
+        </div>
+        {notice && (
+          <Alert variant={notice.ok ? "default" : "destructive"}>
+            <AlertTitle>{notice.ok ? "Import" : "Import failed"}</AlertTitle>
+            <AlertDescription>{notice.text}</AlertDescription>
+          </Alert>
+        )}
+        {sorted.length === 0 ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyTitle>No presets yet</EmptyTitle>
+              <EmptyDescription>Save the current settings to start the gallery.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <div className="flex flex-wrap gap-3">
+            {sorted.map((item) => {
+              const key = thumbKey(item.id, item.preset);
+              const url = thumbs.get(key);
+              const actions: {
+                key: string;
+                label: string;
+                icon: React.ReactNode;
+                onClick: () => void;
+              }[] = [
+                {
+                  key: "favorite",
+                  label: "Favorite",
+                  icon: <Star className={item.favorite ? "fill-current" : undefined} />,
+                  onClick: () => toggleFavorite(item.id),
+                },
+                {
+                  key: "export",
+                  label: "Export",
+                  icon: <Download />,
+                  onClick: () => {
+                    const json = exportJson(item.id);
+                    if (json) download(`${item.preset.name}.preset.json`, json);
+                  },
+                },
+                {
+                  key: "copy",
+                  label: "Duplicate",
+                  icon: <Copy />,
+                  onClick: () => duplicate(item.id),
+                },
+                {
+                  key: "rename",
+                  label: "Rename",
+                  icon: <Pencil />,
+                  onClick: () => {
+                    const next = window.prompt("Rename preset", item.preset.name);
+                    if (next && next.trim()) rename(item.id, next.trim());
+                  },
+                },
+                {
+                  key: "delete",
+                  label: "Delete",
+                  icon: <Trash2 />,
+                  onClick: () => setDeleting(item.id),
+                },
+              ];
+              return (
+                <figure
+                  key={item.id}
+                  className="m-0 flex w-full max-w-175 gap-3 rounded-lg border border-border bg-raised p-3.5"
+                >
                   <button
-                    className="cursor-pointer rounded border p-0"
+                    type="button"
+                    className="h-45 w-60 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border bg-canvas p-0 focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
                     title={`Apply ${item.preset.name}`}
                     onClick={() => {
                       applyPreset(item.preset);
                       toast.success(`Applied ${item.preset.name}`);
                     }}
                   >
-                    {thumbs.get(thumbKey(item.id, item.preset)) ? (
+                    {url ? (
                       <img
-                        src={thumbs.get(thumbKey(item.id, item.preset))}
-                        width={96}
-                        height={96}
+                        src={url}
                         alt={item.preset.name}
-                        className="rounded"
+                        className="size-full object-cover"
+                        style={{ imageRendering: "pixelated" }}
                       />
                     ) : (
-                      <Skeleton className="h-24 w-24" />
+                      <Skeleton className="size-full" />
                     )}
                   </button>
-                  <figcaption className="truncate text-xs">
-                    {item.favorite ? "★ " : ""}
-                    {item.preset.name}
-                  </figcaption>
-                  <div className="flex flex-wrap gap-1">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          size="icon"
-                          variant={item.favorite ? "default" : "ghost"}
-                          aria-label={`Favorite ${item.preset.name}`}
-                          onClick={() => toggleFavorite(item.id)}
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <h3 className="truncate text-card text-foreground">{item.preset.name}</h3>
+                    <p className="mt-1 text-label text-muted-foreground uppercase">
+                      {item.preset.params.method} · threshold {item.preset.params.threshold} · pixel{" "}
+                      {item.preset.params.pixelSize}
+                    </p>
+                    <p className="mt-0.5 text-label text-muted-foreground uppercase">
+                      {item.favorite ? "Favorite · " : ""}
+                      {describeAge(item.createdAt)}
+                    </p>
+                    <div className="mt-auto flex items-end gap-2 pt-3">
+                      {actions.map((a) => (
+                        <Tooltip key={a.key}>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="icon-action"
+                              variant={
+                                a.key === "favorite" && item.favorite ? "accent" : "secondary"
+                              }
+                              aria-label={`${a.label} ${item.preset.name}`}
+                              onClick={a.onClick}
+                            >
+                              {a.icon}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>{a.label}</TooltipContent>
+                        </Tooltip>
+                      ))}
+                    </div>
+                    <div className="mt-1 flex items-end gap-2" aria-hidden>
+                      {actions.map((a) => (
+                        <span
+                          key={a.key}
+                          className="w-8 text-center text-caption text-muted-foreground"
                         >
-                          <Star />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Favorite</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          aria-label={`Export ${item.preset.name} as JSON`}
-                          onClick={() => {
-                            const json = exportJson(item.id);
-                            if (json) download(`${item.preset.name}.preset.json`, json);
-                          }}
-                        >
-                          <Download />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Export JSON</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          aria-label={`Duplicate ${item.preset.name}`}
-                          onClick={() => duplicate(item.id)}
-                        >
-                          <Copy />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Duplicate</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          aria-label={`Rename ${item.preset.name}`}
-                          onClick={() => {
-                            const next = window.prompt("Rename preset", item.preset.name);
-                            if (next && next.trim()) rename(item.id, next.trim());
-                          }}
-                        >
-                          <Pencil />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Rename</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          aria-label={`Delete ${item.preset.name}`}
-                          onClick={() => setDeleting(item.id)}
-                        >
-                          <Trash2 />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Delete</TooltipContent>
-                    </Tooltip>
+                          {a.label}
+                        </span>
+                      ))}
+                    </div>
                   </div>
+                  <p className="sr-only">Click the card to apply</p>
                 </figure>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+              );
+            })}
+          </div>
+        )}
+      </div>
       <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="gap-0 p-6 sm:max-w-105">
+          <DialogHeader className="gap-0">
             <DialogTitle>Delete preset?</DialogTitle>
-            <DialogDescription>This removes the preset permanently.</DialogDescription>
+            <DialogDescription className="mt-3">
+              This removes the preset permanently.
+            </DialogDescription>
+            <p className="mt-3 text-label text-accent-label uppercase">
+              {deleting ? (items.find((i) => i.id === deleting)?.preset.name ?? "") : ""}
+            </p>
           </DialogHeader>
-          <DialogFooter>
+          <div aria-hidden className="my-4 h-px bg-border" />
+          <DialogFooter className="mx-0 mb-0 gap-2 border-0 bg-transparent p-0">
             <DialogClose asChild>
-              <Button variant="secondary">Cancel</Button>
+              <Button variant="secondary" size="sm" className="w-20">
+                Cancel
+              </Button>
             </DialogClose>
             <Button
               variant="destructive"
+              size="sm"
+              className="w-20"
               onClick={() => {
                 if (deleting) remove(deleting);
                 setDeleting(null);
@@ -325,6 +359,7 @@ export default function PresetsPanel() {
               Delete
             </Button>
           </DialogFooter>
+          <p className="text-caption text-muted-foreground">Esc to close</p>
         </DialogContent>
       </Dialog>
     </TooltipProvider>

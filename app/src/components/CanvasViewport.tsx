@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Kbd } from "@/components/ui/kbd";
 import { Eye, Maximize, ZoomIn, ZoomOut } from "lucide-react";
+import { cn } from "cn";
 import type { ImageSource, RenderResult } from "../store";
 
 interface View {
@@ -24,6 +22,35 @@ function isTypingTarget(t: EventTarget | null): boolean {
     t instanceof HTMLInputElement ||
     t instanceof HTMLTextAreaElement ||
     t instanceof HTMLSelectElement
+  );
+}
+
+function ZoomButton({
+  label,
+  hint,
+  onClick,
+  children,
+  className,
+}: {
+  label: string;
+  hint: string;
+  onClick: () => void;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={`${label} (${hint})`}
+      onClick={onClick}
+      className={cn(
+        "flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none [&_svg]:size-3",
+        className,
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -61,7 +88,8 @@ export default function CanvasViewport({
 
   const fit = useCallback(() => {
     if (!active || size.w === 0) return;
-    const scale = Math.min(size.w / active.width, size.h / active.height);
+    // Leave room for the meta line that sits along the bottom edge.
+    const scale = Math.min(size.w / active.width, (size.h - 28) / active.height);
     setView({
       scale,
       ox: (size.w - active.width * scale) / 2,
@@ -161,67 +189,50 @@ export default function CanvasViewport({
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-col gap-2 lg:flex-1">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          size="icon"
-          variant="outline"
-          aria-label="Zoom out"
-          title="Zoom out (-)"
-          onClick={() => zoomAt(1 / 1.25)}
-        >
+    <div ref={containerRef} className="relative min-h-0 flex-1 overflow-hidden">
+      <canvas
+        ref={canvasRef}
+        role="img"
+        aria-label="Dithered image preview"
+        className="block h-full w-full cursor-grab touch-none active:cursor-grabbing"
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onLostPointerCapture={endDrag}
+        onDoubleClick={fit}
+      />
+      <div className="absolute top-2 left-2 flex items-center gap-0.5 rounded-lg border border-border bg-raised/90 p-0.5 backdrop-blur-sm">
+        <ZoomButton label="Zoom out" hint="-" onClick={() => zoomAt(1 / 1.25)}>
           <ZoomOut />
-        </Button>
-        <Badge variant="secondary">{Math.round(view.scale * 100)}%</Badge>
-        <Button
-          size="icon"
-          variant="outline"
-          aria-label="Zoom in"
-          title="Zoom in (+)"
-          onClick={() => zoomAt(1.25)}
-        >
+        </ZoomButton>
+        <span className="w-9 text-center text-caption text-muted-foreground tabular-nums">
+          {Math.round(view.scale * 100)}%
+        </span>
+        <ZoomButton label="Zoom in" hint="+" onClick={() => zoomAt(1.25)}>
           <ZoomIn />
-        </Button>
-        <Button
-          size="icon"
-          variant="outline"
-          aria-label="Fit to view"
-          title="Fit (0)"
-          onClick={fit}
-        >
+        </ZoomButton>
+        <ZoomButton label="Fit to view" hint="0" onClick={fit}>
           <Maximize />
-        </Button>
-        <Button
-          variant={comparing ? "default" : "outline"}
-          title="Hold to compare with original"
+        </ZoomButton>
+        <button
+          type="button"
+          aria-label="Compare with original"
+          aria-pressed={comparing}
+          title="Hold to compare with original (C)"
           onPointerDown={() => setComparing(true)}
           onPointerUp={() => setComparing(false)}
           onPointerLeave={() => setComparing(false)}
           onPointerCancel={() => setComparing(false)}
+          className={cn(
+            "flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none [&_svg]:size-3",
+            comparing
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:text-foreground",
+          )}
         >
-          <Eye /> Compare
-        </Button>
-        <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
-          <Kbd>C</Kbd> compare <Kbd>+</Kbd>
-          <Kbd>-</Kbd> zoom <Kbd>0</Kbd> fit
-        </span>
-      </div>
-      <div
-        ref={containerRef}
-        className="h-72 shrink-0 overflow-hidden rounded border sm:h-96 lg:h-auto lg:min-h-0 lg:flex-1"
-      >
-        <canvas
-          ref={canvasRef}
-          role="img"
-          aria-label="Dithered image preview"
-          className="block h-full w-full cursor-grab touch-none active:cursor-grabbing"
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-          onLostPointerCapture={endDrag}
-          onDoubleClick={fit}
-        />
+          <Eye />
+        </button>
       </div>
     </div>
   );

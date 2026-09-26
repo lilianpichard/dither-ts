@@ -13,13 +13,20 @@ import {
 } from "./request";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Download } from "lucide-react";
+import { useConsoleMeta } from "../components/consoleMeta";
 
 interface ExportImage {
   data: Uint8ClampedArray<ArrayBuffer>;
@@ -46,6 +53,7 @@ export default function ExportPanel() {
   const [charset, setCharset] = useState(DEFAULT_CHARSET);
   const [invert, setInvert] = useState(false);
   const [black, setBlack] = useState(false);
+  const [format, setFormat] = useState<"png" | "jpg" | "svg" | "txt">("png");
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const exportLock = useRef(false);
@@ -157,76 +165,95 @@ export default function ExportPanel() {
     );
   }
 
+  useConsoleMeta("export", exporting ? "Exporting" : exportReady ? "Ready" : "No output");
+
+  // Board C05: a label above each control, formats as one segmented group.
+  const formats = [
+    { id: "png", label: "PNG", run: () => raster("image/png", "png") },
+    { id: "jpg", label: "JPG", run: () => raster("image/jpeg", "jpg", 0.92) },
+    { id: "svg", label: "SVG", run: () => void svg() },
+    { id: "txt", label: "TXT", run: () => void txt() },
+  ] as const;
+
   return (
-    <Card className="overflow-y-auto lg:h-full">
-      <CardHeader>
-        <CardTitle>Export</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <Button disabled={!exportReady} onClick={() => void raster("image/png", "png")}>
-            PNG
-          </Button>
-          <Button disabled={!exportReady} onClick={() => void raster("image/jpeg", "jpg", 0.92)}>
-            JPG
-          </Button>
-          <Button disabled={!exportReady} onClick={() => void svg()}>
-            SVG
-          </Button>
-          <div className="flex items-center gap-2">
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex flex-wrap items-start gap-x-4 gap-y-2.5">
+        <div className="flex flex-col gap-1.5">
+          <Label>Formats</Label>
+          <div className="flex gap-2" role="group" aria-label="Export format">
+            {formats.map((f) => (
+              <Button
+                key={f.id}
+                variant={format === f.id ? "accent" : "secondary"}
+                className="w-19"
+                disabled={!exportReady}
+                onClick={() => {
+                  setFormat(f.id);
+                  void f.run();
+                }}
+              >
+                {f.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="black-vector">Black vector</Label>
+          <div className="flex h-7.5 items-center">
             <Switch id="black-vector" checked={black} onCheckedChange={setBlack} />
-            <Label htmlFor="black-vector">Black vector</Label>
           </div>
-          <Button disabled={!exportReady} onClick={() => void txt()}>
-            TXT
-          </Button>
-          <div className="flex items-center gap-2">
-            <Label id="cell-label">Cell {cell}</Label>
-            <Slider
-              aria-labelledby="cell-label"
-              className="w-28"
-              min={2}
-              max={16}
-              step={1}
-              value={[cell]}
-              onValueChange={([v]) => setCell(v)}
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Label htmlFor="charset">Charset</Label>
-            <Input
-              id="charset"
-              value={charset}
-              className="w-32"
-              onChange={(e) => setCharset(e.target.value)}
-              placeholder={DEFAULT_CHARSET}
-            />
-          </div>
-          <div className="flex items-center gap-2">
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label id="cell-label">Cell {cell}</Label>
+          <Slider
+            aria-labelledby="cell-label"
+            className="w-22.5"
+            min={2}
+            max={16}
+            step={1}
+            value={[cell]}
+            onValueChange={([v]) => setCell(v)}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="charset">Charset</Label>
+          <Input
+            id="charset"
+            value={charset}
+            className="w-32"
+            onChange={(e) => setCharset(e.target.value)}
+            placeholder={DEFAULT_CHARSET}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="invert">Invert</Label>
+          <div className="flex h-7.5 items-center">
             <Switch id="invert" checked={invert} onCheckedChange={setInvert} />
-            <Label htmlFor="invert">Invert</Label>
           </div>
         </div>
-        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-          {live}
+      </div>
+      <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {live}
+      </div>
+      {exporting && (
+        <div aria-busy className="flex flex-col gap-1">
+          <Badge aria-hidden variant="secondary">
+            Exporting {Math.round(exportProgress)}%
+          </Badge>
+          <Progress aria-label="Export progress" value={exportProgress} max={100} />
         </div>
-        {exporting && (
-          <div aria-busy className="flex flex-col gap-1">
-            <Badge aria-hidden variant="secondary">
-              Exporting {Math.round(exportProgress)}%
-            </Badge>
-            <Progress aria-label="Export progress" value={exportProgress} max={100} />
-          </div>
-        )}
-        {!exporting && !exportReady && (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>Nothing to export</EmptyTitle>
-              <EmptyDescription>Render an image first to enable export.</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        )}
-      </CardContent>
-    </Card>
+      )}
+      {!exporting && !exportReady && (
+        <Empty>
+          <EmptyMedia>
+            <Download className="size-5" />
+          </EmptyMedia>
+          <EmptyHeader>
+            <EmptyTitle>Nothing to export</EmptyTitle>
+            <EmptyDescription>Render an image first to enable export.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      )}
+    </div>
   );
 }

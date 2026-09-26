@@ -43,8 +43,8 @@ import {
 } from "./transport";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { useConsoleMeta } from "../components/consoleMeta";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -556,249 +556,245 @@ export default function Timeline() {
       )
     : null;
   const transportLine = transportStatus({ playing, time, duration, loop });
+  useConsoleMeta("timeline", clip ? "Clip loaded" : "No clip");
 
   return (
-    <Card className="overflow-y-auto lg:h-full">
-      <CardHeader>
-        <CardTitle>Video timeline</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          {canOpenFiles() ? (
-            <Button
-              variant="secondary"
-              disabled={working}
-              aria-label="Choose a video"
-              onClick={() => void onPickVideo()}
-            >
-              <Film /> Choose video
-            </Button>
-          ) : (
-            <>
-              <Label htmlFor="video-file" className="sr-only">
-                Video file
-              </Label>
-              <Input
-                id="video-file"
-                type="file"
-                accept="video/*"
-                className="w-full max-w-64"
-                onChange={(e) => void onFile(e.target.files?.[0])}
-              />
-            </>
-          )}
-          {clip && (
-            <Badge variant="secondary">
-              {clip.info.width}×{clip.info.height}, {clip.info.duration.toFixed(1)}s
-            </Badge>
-          )}
-        </div>
-        {!clip ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>No video loaded</EmptyTitle>
-              <EmptyDescription>Choose a video file to scrub and export frames.</EmptyDescription>
-            </EmptyHeader>
-          </Empty>
+    <div className="flex h-full flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {canOpenFiles() ? (
+          <Button
+            variant="secondary"
+            disabled={working}
+            aria-label="Choose a video"
+            onClick={() => void onPickVideo()}
+          >
+            <Film /> Choose video
+          </Button>
         ) : (
           <>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Label id="scrub-label">Scrub {time.toFixed(2)}s</Label>
-                <Slider
-                  aria-labelledby="scrub-label"
-                  className="w-48"
-                  min={0}
-                  max={clip.info.duration}
-                  step={0.05}
-                  value={[time]}
-                  onValueChange={([v]) => onScrub(v)}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="range-in">In</Label>
-                <Input
-                  id="range-in"
-                  type="number"
-                  className="w-20"
-                  min={0}
-                  max={clip.info.duration}
-                  step={0.1}
-                  value={range.start}
-                  onChange={(e) =>
-                    setRange((r) => clampRange({ ...r, start: Number(e.target.value) }, duration))
-                  }
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="range-out">Out</Label>
-                <Input
-                  id="range-out"
-                  type="number"
-                  className="w-20"
-                  min={0}
-                  max={clip.info.duration}
-                  step={0.1}
-                  value={range.end}
-                  onChange={(e) =>
-                    setRange((r) => clampRange({ ...r, end: Number(e.target.value) }, duration))
-                  }
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Label htmlFor="fps">FPS</Label>
-                <Select value={String(fps)} onValueChange={(v) => setFps(Number(v))}>
-                  <SelectTrigger id="fps" className="w-20">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[5, 8, 12, 15, 24, 30].map((f) => (
-                      <SelectItem key={f} value={String(f)}>
-                        {f}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch id="temporal" checked={temporal} onCheckedChange={setTemporal} />
-                <Label htmlFor="temporal">Temporal noise</Label>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Switch id="full-res" checked={fullRes} onCheckedChange={setFullRes} />
-                <Label htmlFor="full-res">Full resolution</Label>
-              </div>
-              {exportDim && workingDim && (
-                <Badge variant="secondary">
-                  Source {clip.info.width}×{clip.info.height} · Working {workingDim.width}×
-                  {workingDim.height} · Export {exportDim.width}×{exportDim.height}
-                </Badge>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Jump to start"
-                disabled={working}
-                onClick={() => onJump(-1)}
-              >
-                <SkipBack />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Step back one frame"
-                disabled={working}
-                onClick={() => onStep(-1)}
-              >
-                <StepBack />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label={playing ? "Pause" : "Play"}
-                disabled={working}
-                onClick={() => void togglePlay()}
-              >
-                {playing ? <Pause /> : <Play />}
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Stop and rewind"
-                disabled={working}
-                onClick={stopPlayback}
-              >
-                <Square />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Step forward one frame"
-                disabled={working}
-                onClick={() => onStep(1)}
-              >
-                <StepForward />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Jump to end"
-                disabled={working}
-                onClick={() => onJump(1)}
-              >
-                <SkipForward />
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label="Loop playback"
-                aria-pressed={loop}
-                disabled={working}
-                onClick={() => setLoop((current) => !current)}
-              >
-                <Repeat />
-              </Button>
-              <Badge variant="secondary">{transportLine}</Badge>
-            </div>
-            <canvas
-              ref={frameRef}
-              role="img"
-              aria-label="Dithered video frame preview"
-              className="max-w-full rounded border"
+            <Label htmlFor="video-file" className="sr-only">
+              Video file
+            </Label>
+            <Input
+              id="video-file"
+              type="file"
+              accept="video/*"
+              className="w-full max-w-64"
+              onChange={(e) => void onFile(e.target.files?.[0])}
             />
-            <p className="text-muted-foreground text-sm">{describeAudioStatus(audio)}</p>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button
-                disabled={working || !canExportMp4()}
-                title={canExportMp4() ? "" : "WebCodecs unavailable"}
-                onClick={() => void runExport("mp4")}
-              >
-                Export MP4
-              </Button>
-              <Button disabled={working} variant="secondary" onClick={() => void runExport("gif")}>
-                Export GIF
-              </Button>
-              {working && (
-                <Button variant="outline" onClick={cancelExport}>
-                  Cancel
-                </Button>
-              )}
-              {working && totalCount > 0 && (
-                <div aria-busy className="flex flex-wrap items-center gap-3">
-                  <Progress
-                    aria-label="Video export progress"
-                    value={Math.min(100, shown)}
-                    max={100}
-                    className="w-48"
-                  />
-                  <Badge aria-hidden variant="secondary">
-                    {doneCount}/{totalCount}
-                    {eta ? ` · ${eta}` : ""}
-                  </Badge>
-                </div>
-              )}
-              {phase && !error && !working && (
-                <Badge aria-hidden variant="secondary">
-                  {phase}
-                </Badge>
-              )}
-            </div>
-            <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-              {live}
-            </div>
-            {error && (
-              <Alert variant="destructive">
-                <AlertTitle>Export failed</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
           </>
         )}
-      </CardContent>
-    </Card>
+        {clip && (
+          <Badge variant="secondary">
+            {clip.info.width}×{clip.info.height}, {clip.info.duration.toFixed(1)}s
+          </Badge>
+        )}
+      </div>
+      {!clip ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No video loaded</EmptyTitle>
+            <EmptyDescription>Choose a video file to scrub and export frames.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Label id="scrub-label">Scrub {time.toFixed(2)}s</Label>
+              <Slider
+                aria-labelledby="scrub-label"
+                className="w-48"
+                min={0}
+                max={clip.info.duration}
+                step={0.05}
+                value={[time]}
+                onValueChange={([v]) => onScrub(v)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="range-in">In</Label>
+              <Input
+                id="range-in"
+                type="number"
+                className="w-20"
+                min={0}
+                max={clip.info.duration}
+                step={0.1}
+                value={range.start}
+                onChange={(e) =>
+                  setRange((r) => clampRange({ ...r, start: Number(e.target.value) }, duration))
+                }
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="range-out">Out</Label>
+              <Input
+                id="range-out"
+                type="number"
+                className="w-20"
+                min={0}
+                max={clip.info.duration}
+                step={0.1}
+                value={range.end}
+                onChange={(e) =>
+                  setRange((r) => clampRange({ ...r, end: Number(e.target.value) }, duration))
+                }
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="fps">FPS</Label>
+              <Select value={String(fps)} onValueChange={(v) => setFps(Number(v))}>
+                <SelectTrigger id="fps" className="w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[5, 8, 12, 15, 24, 30].map((f) => (
+                    <SelectItem key={f} value={String(f)}>
+                      {f}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Switch id="temporal" checked={temporal} onCheckedChange={setTemporal} />
+              <Label htmlFor="temporal">Temporal noise</Label>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Switch id="full-res" checked={fullRes} onCheckedChange={setFullRes} />
+              <Label htmlFor="full-res">Full resolution</Label>
+            </div>
+            {exportDim && workingDim && (
+              <Badge variant="secondary">
+                Source {clip.info.width}×{clip.info.height} · Working {workingDim.width}×
+                {workingDim.height} · Export {exportDim.width}×{exportDim.height}
+              </Badge>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              aria-label="Jump to start"
+              disabled={working}
+              onClick={() => onJump(-1)}
+            >
+              <SkipBack />
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              aria-label="Step back one frame"
+              disabled={working}
+              onClick={() => onStep(-1)}
+            >
+              <StepBack />
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              aria-label={playing ? "Pause" : "Play"}
+              disabled={working}
+              onClick={() => void togglePlay()}
+            >
+              {playing ? <Pause /> : <Play />}
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              aria-label="Stop and rewind"
+              disabled={working}
+              onClick={stopPlayback}
+            >
+              <Square />
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              aria-label="Step forward one frame"
+              disabled={working}
+              onClick={() => onStep(1)}
+            >
+              <StepForward />
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              aria-label="Jump to end"
+              disabled={working}
+              onClick={() => onJump(1)}
+            >
+              <SkipForward />
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              aria-label="Loop playback"
+              aria-pressed={loop}
+              disabled={working}
+              onClick={() => setLoop((current) => !current)}
+            >
+              <Repeat />
+            </Button>
+            <Badge variant="secondary">{transportLine}</Badge>
+          </div>
+          <canvas
+            ref={frameRef}
+            role="img"
+            aria-label="Dithered video frame preview"
+            className="max-h-64 w-full rounded-lg border border-border bg-canvas object-contain"
+          />
+          <p className="text-label text-muted-foreground">{describeAudioStatus(audio)}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              disabled={working || !canExportMp4()}
+              title={canExportMp4() ? "" : "WebCodecs unavailable"}
+              onClick={() => void runExport("mp4")}
+            >
+              Export MP4
+            </Button>
+            <Button disabled={working} variant="secondary" onClick={() => void runExport("gif")}>
+              Export GIF
+            </Button>
+            {working && (
+              <Button variant="outline" onClick={cancelExport}>
+                Cancel
+              </Button>
+            )}
+            {working && totalCount > 0 && (
+              <div aria-busy className="flex flex-wrap items-center gap-3">
+                <Progress
+                  aria-label="Video export progress"
+                  value={Math.min(100, shown)}
+                  max={100}
+                  className="w-48"
+                />
+                <Badge aria-hidden variant="secondary">
+                  {doneCount}/{totalCount}
+                  {eta ? ` · ${eta}` : ""}
+                </Badge>
+              </div>
+            )}
+            {phase && !error && !working && (
+              <Badge aria-hidden variant="secondary">
+                {phase}
+              </Badge>
+            )}
+          </div>
+          <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+            {live}
+          </div>
+          {error && (
+            <Alert variant="destructive">
+              <AlertTitle>Export failed</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+        </>
+      )}
+    </div>
   );
 }

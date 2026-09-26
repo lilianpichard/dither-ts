@@ -18,9 +18,9 @@ export function describeRenderStatus({
   ms,
   previewScaled,
 }: RenderStatus): string {
-  if (!hasSource) return "No image loaded";
+  if (!hasSource) return "No image";
   if (rendering) return RENDERING_TEXT;
   if (ms === null || !Number.isFinite(ms)) return "Ready";
-  const scaled = previewScaled ? " · preview scaled" : "";
+  const scaled = previewScaled ? " · scaled" : "";
   return `Done in ${ms.toFixed(1)} ms${scaled}`;
 }
