@@ -10,11 +10,23 @@ export interface WorkerLike {
   onmessageerror: ((this: any, e: MessageEvent) => void) | null;
 }
 
+export interface RenderPoolOptions {
+  signal?: AbortSignal;
+  timeout?: number;
+}
+
 interface PoolJob {
-  resolve: (r: RenderResponse) => void;
-  reject: (e: Error) => void;
-  onProgress?: (u: ProgressUpdate) => void;
-  slot: PoolSlot;
+  resolve: (response: RenderResponse) => void;
+  reject: (error: Error) => void;
+  onProgress?: (update: ProgressUpdate) => void;
+  removeAbort?: () => void;
+  timeoutId?: ReturnType<typeof setTimeout>;
+  generation: number;
+  id: number | null;
+  slot: PoolSlot | null;
+  settled: boolean;
+  request: Omit<RenderRequest, "id">;
+  transfer: Transferable[];
 }
 
 interface PoolSlot {
@@ -23,7 +35,6 @@ interface PoolSlot {
   jobId: number | null;
 }
 
-/** Default pool size: all cores but one, clamped to 1..8. */
 export function defaultPoolSize(): number {
   const cores =
     typeof navigator !== "undefined" && navigator.hardwareConcurrency
@@ -32,17 +43,37 @@ export function defaultPoolSize(): number {
   return Math.min(8, Math.max(1, cores - 1));
 }
 
-/**
- * Fixed-size pool of render workers. Jobs run on idle workers in FIFO
- * order; responses route by id so completion order never matters.
- * invalidate() rejects everything in flight and rebuilds dead workers.
- */
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function abortError(): Error {
+  const error = new Error("pool render aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+function timeoutError(timeout: number): Error {
+  const error = new Error(`pool render timed out after ${timeout}ms`);
+  error.name = "TimeoutError";
+  return error;
+}
+
+function validateTimeout(timeout: number | undefined): number | undefined {
+  if (timeout === undefined) return undefined;
+  if (!Number.isFinite(timeout) || timeout < 0) {
+    throw new TypeError("timeout must be a finite non-negative number");
+  }
+  return timeout;
+}
+
 export class RenderPool {
   private slots: PoolSlot[] = [];
-  private queue: Array<(slot: PoolSlot) => void> = [];
+  private queue: PoolJob[] = [];
   private seq = 0;
   private generation = 0;
   private readonly spawn: () => WorkerLike;
+  private jobs = new Map<number, PoolJob>();
 
   constructor(size = defaultPoolSize(), spawn: () => WorkerLike = () => new RenderWorker()) {
     this.spawn = spawn;
@@ -60,117 +91,209 @@ export class RenderPool {
   private makeSlot(): PoolSlot {
     const slot: PoolSlot = { worker: this.spawn(), busy: false, jobId: null };
     this.attach(slot);
-    const fail = (reason: Error) => {
-      for (const [id, job] of this.jobs) {
-        if (job.slot === slot) {
-          this.jobs.delete(id);
-          job.reject(reason);
-        }
-      }
-      try {
-        slot.worker.terminate();
-      } catch {
-        // Already gone; replaced below regardless.
-      }
-      slot.worker = this.spawn();
-      this.attach(slot);
-      slot.busy = false;
-      slot.jobId = null;
-      this.pump();
-    };
-    slot.worker.onerror = () => fail(new Error("pool worker failed"));
-    slot.worker.onmessageerror = () => fail(new Error("pool worker message failed"));
     return slot;
   }
 
   private attach(slot: PoolSlot): void {
-    slot.worker.onmessage = (e: MessageEvent) => {
-      const msg = e.data as RenderMessage;
-      const job = this.jobs.get(msg.id);
+    const current = slot.worker;
+    current.onmessage = (event: MessageEvent) => {
+      if (slot.worker !== current) return;
+      const message = event.data as RenderMessage;
+      const job = this.jobs.get(message.id);
       if (!job || job.slot !== slot) return;
-      if (msg.kind === "progress") {
-        job.onProgress?.({
-          rowsDone: msg.rowsDone,
-          totalRows: msg.totalRows,
-          width: msg.width,
-          height: msg.height,
-          pixels: msg.pixels,
-        });
+      if (message.kind === "progress") {
+        try {
+          job.onProgress?.({
+            rowsDone: message.rowsDone,
+            totalRows: message.totalRows,
+            width: message.width,
+            height: message.height,
+            pixels: message.pixels,
+          });
+        } catch (error) {
+          this.replaceSlot(slot, current, asError(error));
+        }
         return;
       }
-      this.jobs.delete(msg.id);
-      slot.busy = false;
-      slot.jobId = null;
-      job.resolve(msg);
-      this.pump();
+      this.resolveJob(job, message);
     };
+    current.onerror = () => this.replaceSlot(slot, current, new Error("pool worker failed"));
+    current.onmessageerror = () =>
+      this.replaceSlot(slot, current, new Error("pool worker message failed"));
   }
 
-  private jobs = new Map<number, PoolJob>();
+  private removeQueued(job: PoolJob): void {
+    const index = this.queue.indexOf(job);
+    if (index >= 0) this.queue.splice(index, 1);
+  }
+
+  private cleanup(job: PoolJob): void {
+    if (job.timeoutId !== undefined) clearTimeout(job.timeoutId);
+    job.removeAbort?.();
+  }
+
+  private releaseSlot(job: PoolJob): PoolSlot | undefined {
+    const slot = job.slot;
+    if (!slot) return undefined;
+    if (job.id !== null && this.jobs.get(job.id) === job) this.jobs.delete(job.id);
+    if (slot.busy && slot.jobId === job.id) {
+      slot.busy = false;
+      slot.jobId = null;
+    }
+    job.slot = null;
+    job.id = null;
+    return slot;
+  }
+
+  private resolveJob(job: PoolJob, response: RenderResponse): void {
+    if (job.settled) return;
+    job.settled = true;
+    this.cleanup(job);
+    this.releaseSlot(job);
+    job.resolve(response);
+    this.pump();
+  }
+
+  private rejectJob(job: PoolJob, error: Error, rebuild = false): PoolSlot | undefined {
+    if (job.settled) return undefined;
+    job.settled = true;
+    this.cleanup(job);
+    const slot = this.releaseSlot(job);
+    job.reject(error);
+    if (rebuild && slot) this.rebuildSlot(slot);
+    return slot;
+  }
+
+  private replaceSlot(slot: PoolSlot, failed: WorkerLike, reason: Error): void {
+    if (slot.worker !== failed) return;
+    const job = [...this.jobs.values()].find((candidate) => candidate.slot === slot);
+    if (job) this.rejectJob(job, reason);
+    this.rebuildSlot(slot);
+    this.pump();
+  }
+
+  private rebuildSlot(slot: PoolSlot): void {
+    const old = slot.worker;
+    old.onmessage = null;
+    old.onerror = null;
+    old.onmessageerror = null;
+    try {
+      old.terminate();
+    } catch {}
+    slot.worker = this.spawn();
+    this.attach(slot);
+    slot.busy = false;
+    slot.jobId = null;
+  }
+
+  private cancel(job: PoolJob, error: Error, rebuild = false): void {
+    if (job.settled) return;
+    if (!job.slot) this.removeQueued(job);
+    this.rejectJob(job, error, rebuild);
+    this.pump();
+  }
 
   private pump(): void {
     while (this.queue.length > 0) {
-      const slot = this.slots.find((s) => !s.busy);
+      const job = this.queue[0]!;
+      if (job.settled) {
+        this.queue.shift();
+        continue;
+      }
+      const slot = this.slots.find((candidate) => !candidate.busy);
       if (!slot) return;
-      const task = this.queue.shift()!;
-      task(slot);
+      this.queue.shift();
+      if (job.generation !== this.generation) {
+        this.rejectJob(job, new Error("cancelled"));
+        continue;
+      }
+      const id = ++this.seq;
+      job.id = id;
+      job.slot = slot;
+      slot.busy = true;
+      slot.jobId = id;
+      this.jobs.set(id, job);
+      try {
+        slot.worker.postMessage({ ...job.request, id }, { transfer: job.transfer });
+      } catch (error) {
+        this.rejectJob(job, asError(error));
+      }
     }
+  }
+
+  private start(
+    req: Omit<RenderRequest, "id">,
+    transfer: Transferable[],
+    onProgress: ((update: ProgressUpdate) => void) | undefined,
+    options: RenderPoolOptions | undefined,
+  ): Promise<RenderResponse> {
+    const timeout = validateTimeout(options?.timeout);
+    const signal = options?.signal;
+    if (signal?.aborted) return Promise.reject(abortError());
+    return new Promise((resolve, reject) => {
+      const job: PoolJob = {
+        resolve,
+        reject,
+        onProgress,
+        generation: this.generation,
+        id: null,
+        slot: null,
+        settled: false,
+        request: req,
+        transfer,
+      };
+      this.queue.push(job);
+      if (signal) {
+        const onAbort = (): void => this.cancel(job, abortError(), true);
+        signal.addEventListener("abort", onAbort, { once: true });
+        job.removeAbort = () => signal.removeEventListener("abort", onAbort);
+        if (signal.aborted) onAbort();
+      }
+      if (timeout !== undefined && !job.settled) {
+        job.timeoutId = setTimeout(() => this.cancel(job, timeoutError(timeout), true), timeout);
+      }
+      this.pump();
+    });
   }
 
   render(
     req: Omit<RenderRequest, "id">,
     transfer: Transferable[],
-    onProgress?: (u: ProgressUpdate) => void,
+    onProgress?: (update: ProgressUpdate) => void,
+    options?: RenderPoolOptions,
+  ): Promise<RenderResponse>;
+  render(
+    req: Omit<RenderRequest, "id">,
+    transfer: Transferable[],
+    options?: RenderPoolOptions,
+  ): Promise<RenderResponse>;
+  render(
+    req: Omit<RenderRequest, "id">,
+    transfer: Transferable[],
+    onProgressOrOptions?: ((update: ProgressUpdate) => void) | RenderPoolOptions,
+    maybeOptions?: RenderPoolOptions,
   ): Promise<RenderResponse> {
-    const gen = this.generation;
-    return new Promise((resolve, reject) => {
-      this.queue.push((slot: PoolSlot) => {
-        if (gen !== this.generation) {
-          reject(new Error("cancelled"));
-          this.pump();
-          return;
-        }
-        const id = ++this.seq;
-        slot.busy = true;
-        slot.jobId = id;
-        this.jobs.set(id, { resolve, reject, onProgress, slot });
-        try {
-          slot.worker.postMessage({ ...req, id }, { transfer });
-        } catch (err) {
-          this.jobs.delete(id);
-          slot.busy = false;
-          slot.jobId = null;
-          reject(err instanceof Error ? err : new Error(String(err)));
-          this.pump();
-        }
-      });
-      this.pump();
-    });
+    const onProgress = typeof onProgressOrOptions === "function" ? onProgressOrOptions : undefined;
+    const options =
+      typeof onProgressOrOptions === "object" && onProgressOrOptions !== null
+        ? onProgressOrOptions
+        : maybeOptions;
+    return this.start(req, transfer, onProgress, options);
   }
 
-  /** Reject all pending work and rebuild every worker. */
   invalidate(): void {
     this.generation++;
-    this.queue.length = 0;
-    for (const [, job] of this.jobs) job.reject(new Error("cancelled"));
-    this.jobs.clear();
-    for (const slot of this.slots) {
-      try {
-        slot.worker.terminate();
-      } catch {
-        // Ignore teardown failures; the slot is rebuilt regardless.
-      }
-      slot.worker = this.spawn();
-      this.attach(slot);
-      slot.busy = false;
-      slot.jobId = null;
-    }
+    const queued = this.queue.splice(0);
+    for (const job of queued) this.rejectJob(job, new Error("cancelled"));
+    const active = [...this.jobs.values()];
+    for (const job of active) this.rejectJob(job, new Error("cancelled"));
+    for (const slot of this.slots) this.rebuildSlot(slot);
+    this.pump();
   }
 }
 
 let shared: RenderPool | null = null;
 
-/** Lazily built shared pool (no workers until first render). */
 export function getPool(): RenderPool {
   if (!shared) shared = new RenderPool();
   return shared;

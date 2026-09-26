@@ -9,21 +9,36 @@
     "dev": "npm --prefix ../app run build && npm run sync-app && electron .",
     "sync-app": "node -e \"const fs=require('node:fs');fs.rmSync('./dist',{recursive:true,force:true});fs.cpSync('../app/dist','./dist',{recursive:true})\"",
     "dist": "npm --prefix ../app run build && npm run sync-app && electron-builder",
-    "dist-dir": "npm --prefix ../app run build && npm run sync-app && electron-builder --dir"
+    "dist-dir": "npm --prefix ../app run build && npm run sync-app && electron-builder --dir",
+    "smoke": "npm run dist-dir && node scripts/smoke.js",
+    "test": "node --test test/*.test.js"
   },
   "license": "GPL-3.0-only",
   "devDependencies": {
-    "electron": "^44.4.3",
+    "electron": "^44.4.5",
     "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "com.dither-ts.desktop",
     "productName": "dither-ts",
+    "executableName": "dither-ts",
+    "asar": true,
     "files": [
       "main.js",
       "preload.js",
+      "lib/**/*",
       "dist/**/*"
     ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "loadBrowserProcessSpecificV8Snapshot": false,
+      "grantFileProtocolExtraPrivileges": true
+    },
     "directories": {
       "output": "release"
     },

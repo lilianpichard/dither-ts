@@ -26,14 +26,17 @@ export default function EffectsPanel() {
   const [picked, setPicked] = useState(EFFECT_DEFS[0].type);
 
   return (
-    <Card className="h-full overflow-y-auto">
+    <Card className="overflow-y-auto lg:h-full">
       <CardHeader>
         <CardTitle>Effects</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
+          <Label htmlFor="fx-picker" className="sr-only">
+            Effect type
+          </Label>
           <Select value={picked} onValueChange={setPicked}>
-            <SelectTrigger className="w-52">
+            <SelectTrigger id="fx-picker" className="w-52">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -60,10 +63,11 @@ export default function EffectsPanel() {
               </div>
               {(def ? def.params : []).map((p) => (
                 <div key={p.key} className="flex items-center gap-2">
-                  <Label>
+                  <Label id={`fx-${e.key}-${p.key}-label`}>
                     {p.label} {typeof e.params[p.key] === "number" ? e.params[p.key] : p.def}
                   </Label>
                   <Slider
+                    aria-labelledby={`fx-${e.key}-${p.key}-label`}
                     className="w-28"
                     min={p.min}
                     max={p.max}
@@ -77,6 +81,7 @@ export default function EffectsPanel() {
                 <Button
                   size="icon"
                   variant="ghost"
+                  aria-label={`Move ${def ? def.label : e.type} up`}
                   title="Move up"
                   onClick={() => moveEffect(i, -1)}
                 >
@@ -85,12 +90,19 @@ export default function EffectsPanel() {
                 <Button
                   size="icon"
                   variant="ghost"
+                  aria-label={`Move ${def ? def.label : e.type} down`}
                   title="Move down"
                   onClick={() => moveEffect(i, 1)}
                 >
                   <ChevronDown />
                 </Button>
-                <Button size="icon" variant="ghost" title="Remove" onClick={() => removeEffect(i)}>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label={`Remove ${def ? def.label : e.type}`}
+                  title="Remove"
+                  onClick={() => removeEffect(i)}
+                >
                   <X />
                 </Button>
               </div>

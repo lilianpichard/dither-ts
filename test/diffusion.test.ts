@@ -12,6 +12,13 @@ import {
 } from "../src/diffusion.js";
 import { thresholdBW } from "../src/pipeline.js";
 import { PALETTES } from "../src/palettes.js";
+import {
+  isDiffusionTableMethod,
+  isSpecialDiffusionMethod,
+  type ColorDiffusionMethod,
+  type DiffusionTableMethod,
+  type SpecialDiffusionMethod,
+} from "../src/methods.js";
 import type { GrayImage, RowProgress } from "../src/types.js";
 
 function gray(values: number[], w: number, h: number): GrayImage {
@@ -37,8 +44,12 @@ function binary(out: Uint8Array): boolean {
   return Array.from(out).every((v) => v === 0 || v === 255);
 }
 
-const TABLE_NAMES = Object.keys(DIFFUSION_TABLES);
-const SPECIAL_NAMES = Object.keys(SPECIAL_DIFFUSION);
+const TABLE_NAMES = Object.keys(DIFFUSION_TABLES).filter((name): name is DiffusionTableMethod =>
+  Object.hasOwn(DIFFUSION_TABLES, name),
+);
+const SPECIAL_NAMES = Object.keys(SPECIAL_DIFFUSION).filter(
+  (name): name is SpecialDiffusionMethod => Object.hasOwn(SPECIAL_DIFFUSION, name),
+);
 
 describe("diffusion tables", () => {
   it("registers 9 table kernels with at least 3 taps each", () => {
@@ -67,12 +78,11 @@ describe("diffusion tables", () => {
     }
   });
 
-  it("unknown table name falls back to Floyd-Steinberg", () => {
+  it("rejects unknown, inherited, and B&W-only table names", () => {
     const img = fixture();
-    assert.deepEqual(
-      Array.from(diffuseBW(img, "Nope", 128)),
-      Array.from(diffuseBW(img, "Floyd-Steinberg", 128)),
-    );
+    for (const method of ["Nope", "toString", "__proto__", "Riemersma", "Ordered"]) {
+      assert.throws(() => diffuseBW(img, method as DiffusionTableMethod, 128), /method/);
+    }
   });
 });
 
@@ -101,9 +111,34 @@ describe("special scans", () => {
     assert.ok(Array.from(riemersmaBW(gray(fill(64, 255), 8, 8), 128)).every((v) => v === 255));
   });
 
-  it("Dot-Diffusion equals plain threshold by construction", () => {
-    const img = fixture();
-    assert.deepEqual(Array.from(dotDiffusionBW(img, 128)), Array.from(thresholdBW(img, 128)));
+  it("Variable-Error changes a later pixel in scan order", () => {
+    const img = gray([127, 128, 128, 128, 0, 0, 0, 0], 4, 2);
+    const out = variableErrorBW(img, 128);
+    assert.equal(out[1], 255);
+    assert.equal(thresholdBW(img, 128)[1], 0);
+  });
+
+  it("Dot-Diffusion uses class-weighted sequential error", () => {
+    const img = gray([127, 128, 0, 0], 4, 1);
+    const out = dotDiffusionBW(img, 128);
+    assert.deepEqual(Array.from(out), [0, 255, 0, 0]);
+  });
+
+  it("gives the newest Riemersma error full weight and older errors geometric decay", () => {
+    assert.deepEqual(
+      Array.from(riemersmaBW(gray([200, 0, 100, 128], 4, 1), 128)),
+      [255, 0, 0, 255],
+    );
+    assert.deepEqual(Array.from(riemersmaBW(gray([0, 9, 0, 118], 4, 1), 128)), [0, 0, 0, 0]);
+  });
+
+  it("skips masked samples in table and special scans", () => {
+    const img = gray([200, 170, 180], 3, 1);
+    const mask = new Uint8Array([0, 1, 1]);
+    assert.deepEqual(Array.from(diffuseBW(img, "Floyd-Steinberg", 128, mask)), [0, 255, 255]);
+    for (const fn of [ostromoukhovBW, variableErrorBW, dotDiffusionBW, riemersmaBW]) {
+      assert.equal(fn(img, 128, mask)[0], 0, fn.name);
+    }
   });
 
   it("specials output binary and are deterministic", () => {
@@ -114,6 +149,36 @@ describe("special scans", () => {
       assert.ok(binary(a), fn.name);
       assert.deepEqual(Array.from(a), Array.from(b), fn.name);
     }
+  });
+
+  it("handles single-row, single-column, and single-pixel boundaries", () => {
+    const fns = [ostromoukhovBW, variableErrorBW, dotDiffusionBW, riemersmaBW];
+    for (const fn of fns) {
+      for (const [values, w, h] of [
+        [[129], 1, 1],
+        [[129, 128, 127, 126], 4, 1],
+        [[129, 128, 127, 126], 1, 4],
+        [[60, 164, 142, 208], 2, 2],
+      ] as Array<[number[], number, number]>) {
+        const out = fn(gray(values, w, h), 128);
+        assert.equal(out.length, values.length, fn.name);
+        assert.ok(binary(out), fn.name);
+      }
+    }
+  });
+
+  it("validates direct kernel inputs", () => {
+    const badImage = gray([NaN], 1, 1);
+    const fns = [ostromoukhovBW, variableErrorBW, dotDiffusionBW, riemersmaBW];
+    for (const fn of fns) {
+      assert.throws(() => fn(badImage, 128));
+      assert.throws(() => fn(fixture(1, 1), NaN));
+    }
+    assert.throws(() => diffuseBW(fixture(1, 1), "Floyd-Steinberg", NaN));
+    assert.throws(() => diffusePalette(new Uint8ClampedArray(2), 1, 1, PALETTES["B&W"]));
+    assert.throws(() =>
+      diffusePalette(new Uint8ClampedArray(3), 1, 1, [[0, 0, 0]] as [number, number, number][]),
+    );
   });
 
   it("every diffusion method differs from every other on some fixture", () => {
@@ -140,11 +205,16 @@ describe("special scans", () => {
       return { width: w, height: h, data };
     })();
     const fixtures = [patterned, linear, gradient];
-    // Dot-Diffusion is excluded: it equals plain threshold by construction.
-    const names = [...TABLE_NAMES, ...SPECIAL_NAMES.filter((n) => n !== "Dot-Diffusion")];
-    const run = (img: GrayImage, name: string): string => {
-      const out =
-        name in DIFFUSION_TABLES ? diffuseBW(img, name, 128) : SPECIAL_DIFFUSION[name](img, 128);
+    const names = [...TABLE_NAMES, ...SPECIAL_NAMES];
+    const run = (img: GrayImage, name: DiffusionTableMethod | SpecialDiffusionMethod): string => {
+      let out: Uint8Array;
+      if (isDiffusionTableMethod(name)) {
+        out = diffuseBW(img, name, 128);
+      } else if (isSpecialDiffusionMethod(name)) {
+        out = SPECIAL_DIFFUSION[name](img, 128);
+      } else {
+        throw new TypeError(`unknown method: ${name}`);
+      }
       return Array.from(out).join(",");
     };
     for (let i = 0; i < names.length; i++) {
@@ -189,12 +259,27 @@ describe("color diffusion", () => {
     assert.ok(membersOf(out, pal));
   });
 
-  it("unknown color method falls back to Floyd-Steinberg", () => {
-    const pal = PALETTES["GameBoy"];
-    assert.deepEqual(
-      Array.from(diffusePalette(redImage(), 4, 4, pal, "Nope")),
-      Array.from(diffusePalette(redImage(), 4, 4, pal, "Floyd-Steinberg")),
+  it("skips masked color samples in palette diffusion", () => {
+    const rgb = new Uint8ClampedArray([255, 0, 0, 200, 0, 0, 0, 0, 255]);
+    const out = diffusePalette(
+      rgb,
+      3,
+      1,
+      PALETTES["B&W"],
+      "Floyd-Steinberg",
+      new Uint8Array([0, 1, 1]),
     );
+    assert.deepEqual(Array.from(out.slice(0, 3)), [0, 0, 0]);
+  });
+
+  it("rejects unknown, inherited, and B&W-only color methods", () => {
+    const pal = PALETTES["GameBoy"];
+    for (const method of ["Nope", "toString", "__proto__", "Riemersma", "Ordered"]) {
+      assert.throws(
+        () => diffusePalette(redImage(), 4, 4, pal, method as ColorDiffusionMethod),
+        /method/,
+      );
+    }
   });
 });
 

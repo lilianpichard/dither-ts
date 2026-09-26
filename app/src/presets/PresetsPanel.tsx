@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { renderImage } from "../worker/client";
 import { useApp } from "../store";
+import { requestOperations } from "../image/settings";
 import { makeSample } from "./sample";
 import { applyPreset, usePresets } from "./store";
 import type { Preset } from "./schema";
@@ -21,7 +22,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Copy, Download, Pencil, Star, Trash2, Upload } from "lucide-react";
+import { Copy, Download, Library, Pencil, Star, Trash2, Upload } from "lucide-react";
 
 function thumbKey(id: string, preset: Preset): string {
   return `${id}:${JSON.stringify(preset)}`;
@@ -44,6 +45,8 @@ async function renderThumb(preset: Preset): Promise<string> {
           : preset.params.palette.custom,
       pixelSize: Math.max(1, preset.params.pixelSize),
       effects: preset.effects,
+      // A preset crop is authored for its own image: fit it to the sample.
+      operations: requestOperations(preset.operations, sample.width, sample.height),
       seed: 0,
     },
     [copy],
@@ -70,6 +73,7 @@ export default function PresetsPanel() {
   const toggleFavorite = usePresets((s) => s.toggleFavorite);
   const duplicate = usePresets((s) => s.duplicate);
   const importJson = usePresets((s) => s.importJson);
+  const installCatalog = usePresets((s) => s.installCatalog);
   const exportJson = usePresets((s) => s.exportJson);
   const params = useApp((s) => s.params);
   const [name, setName] = useState("");
@@ -113,7 +117,9 @@ export default function PresetsPanel() {
   async function onImportFile(file: File | undefined) {
     if (!file) return;
     const text = await file.text();
-    const { ok, warnings } = importJson(text);
+    // The file stem names the preset: legacy files carry no name of their own.
+    const { added, warnings } = importJson(text, file.name.replace(/\.json$/i, ""));
+    const ok = added > 0;
     const msg = ok
       ? warnings.length
         ? `Imported with warnings: ${warnings.join("; ")}`
@@ -125,11 +131,25 @@ export default function PresetsPanel() {
     if (importRef.current) importRef.current.value = "";
   }
 
+  function onInstallCatalog() {
+    const { added, warnings } = installCatalog();
+    if (added === 0) {
+      toast.info("Original presets are already in the gallery");
+      return;
+    }
+    // Every bundled preset is a legacy file, so warnings are expected here.
+    setNotice({
+      ok: true,
+      text: `Added ${added} original presets. Migration notes: ${warnings.join("; ")}`,
+    });
+    toast.success(`Added ${added} original presets`);
+  }
+
   const sorted = [...items].sort((a, b) => Number(b.favorite) - Number(a.favorite));
 
   return (
     <TooltipProvider>
-      <Card className="h-full overflow-y-auto">
+      <Card className="overflow-y-auto lg:h-full">
         <CardHeader>
           <CardTitle>Presets</CardTitle>
         </CardHeader>
@@ -138,6 +158,7 @@ export default function PresetsPanel() {
             <Input
               value={name}
               placeholder="Preset name"
+              aria-label="Preset name"
               className="w-52"
               onChange={(e) => setName(e.target.value)}
             />
@@ -152,6 +173,9 @@ export default function PresetsPanel() {
             </Button>
             <Button variant="secondary" onClick={() => importRef.current?.click()}>
               <Upload /> Import JSON
+            </Button>
+            <Button variant="secondary" onClick={onInstallCatalog}>
+              <Library /> Add originals
             </Button>
             <Input
               ref={importRef}
@@ -177,7 +201,7 @@ export default function PresetsPanel() {
           ) : (
             <div className="flex flex-wrap gap-3">
               {sorted.map((item) => (
-                <figure key={item.id} className="m-0 w-28">
+                <figure key={item.id} className="m-0 w-32">
                   <button
                     className="cursor-pointer rounded border p-0"
                     title={`Apply ${item.preset.name}`}
@@ -202,12 +226,13 @@ export default function PresetsPanel() {
                     {item.favorite ? "★ " : ""}
                     {item.preset.name}
                   </figcaption>
-                  <div className="flex gap-1">
+                  <div className="flex flex-wrap gap-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
                           size="icon"
                           variant={item.favorite ? "default" : "ghost"}
+                          aria-label={`Favorite ${item.preset.name}`}
                           onClick={() => toggleFavorite(item.id)}
                         >
                           <Star />
@@ -220,6 +245,7 @@ export default function PresetsPanel() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label={`Export ${item.preset.name} as JSON`}
                           onClick={() => {
                             const json = exportJson(item.id);
                             if (json) download(`${item.preset.name}.preset.json`, json);
@@ -232,7 +258,12 @@ export default function PresetsPanel() {
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button size="icon" variant="ghost" onClick={() => duplicate(item.id)}>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`Duplicate ${item.preset.name}`}
+                          onClick={() => duplicate(item.id)}
+                        >
                           <Copy />
                         </Button>
                       </TooltipTrigger>
@@ -243,6 +274,7 @@ export default function PresetsPanel() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          aria-label={`Rename ${item.preset.name}`}
                           onClick={() => {
                             const next = window.prompt("Rename preset", item.preset.name);
                             if (next && next.trim()) rename(item.id, next.trim());
@@ -255,7 +287,12 @@ export default function PresetsPanel() {
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button size="icon" variant="ghost" onClick={() => setDeleting(item.id)}>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={`Delete ${item.preset.name}`}
+                          onClick={() => setDeleting(item.id)}
+                        >
                           <Trash2 />
                         </Button>
                       </TooltipTrigger>

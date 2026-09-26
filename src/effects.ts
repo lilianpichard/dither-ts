@@ -3,6 +3,12 @@
 // Every randomized effect is seeded: same inputs give same pixels.
 
 import { mulberry32 } from "./prng.js";
+import {
+  assertRGBBuffer,
+  nearestVisibleRGBA,
+  premultiplyRGBA,
+  unpremultiplyRGBA,
+} from "./validation.js";
 import type { RowProgress } from "./types.js";
 
 export interface EffectParams {
@@ -35,15 +41,48 @@ function num(params: EffectParams, key: string, def: number): number {
   return typeof v === "number" && Number.isFinite(v) ? v : def;
 }
 
+function effectDef(type: string): EffectDef {
+  if (typeof type !== "string") throw new TypeError("effect type must be a string");
+  const def = EFFECT_DEFS.find((candidate) => candidate.type === type);
+  if (!def) throw new TypeError(`unknown effect type: ${type}`);
+  return def;
+}
+
+function normalizeParams(type: string, params: EffectParams): EffectParams {
+  if (typeof params !== "object" || params === null || Array.isArray(params)) {
+    throw new TypeError("effect params must be an object");
+  }
+  const def = effectDef(type);
+  const normalized: EffectParams = {};
+  for (const param of def.params) {
+    const value = params[param.key];
+    if (value === undefined) {
+      normalized[param.key] = param.def;
+      continue;
+    }
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new TypeError(`effect parameter must be finite: ${param.key}`);
+    }
+    normalized[param.key] = Math.min(param.max, Math.max(param.min, value));
+  }
+  return normalized;
+}
+
 function copyOf(src: Uint8ClampedArray): Uint8ClampedArray {
   return new Uint8ClampedArray(src);
 }
 
-/**
- * Fast blur of the RGB channels; alpha untouched. Three sliding-window
- * box passes approximate a gaussian in O(pixels) time, independent of
- * radius — unlike a naive kernel, whose cost grows with sigma.
- */
+function isIdentityEffect(type: string, params: EffectParams): boolean {
+  if (type === "glow") return params.radius <= 0 || params.intensity <= 0;
+  if (type === "chromatic-aberration") return Math.round(params.offset) === 0;
+  if (type === "blur") return params.radius <= 0;
+  if (type === "sharpen") return params.amount <= 0;
+  if (type === "scanlines") return params.strength <= 0;
+  if (type === "grain") return params.amount <= 0;
+  return false;
+}
+
+/** Three horizontal and vertical sliding-window passes on RGB only. */
 function blurRGBA(
   src: Uint8ClampedArray,
   w: number,
@@ -54,47 +93,38 @@ function blurRGBA(
   if (radius <= 0) return copyOf(src);
   const r = Math.max(1, Math.round(radius));
   const div = 2 * r + 1;
-  let a = new Float32Array(src.length);
-  for (let i = 0; i < src.length; i++) a[i] = src[i];
-  let b = new Float32Array(src.length);
+  let read = Float32Array.from(src);
+  let write = new Float32Array(src.length);
   const clamp = (v: number, max: number): number => (v < 0 ? 0 : v >= max ? max - 1 : v);
   for (let pass = 0; pass < 3; pass++) {
-    // Horizontal sliding window.
     for (let y = 0; y < h; y++) {
       const row = y * w;
       for (let c = 0; c < 3; c++) {
         let acc = 0;
-        for (let i = -r; i <= r; i++) acc += a[(row + clamp(i, w)) * 4 + c];
+        for (let i = -r; i <= r; i++) acc += read[(row + clamp(i, w)) * 4 + c];
         for (let x = 0; x < w; x++) {
-          b[(row + x) * 4 + c] = acc / div;
-          acc += a[(row + clamp(x + r + 1, w)) * 4 + c] - a[(row + clamp(x - r, w)) * 4 + c];
+          write[(row + x) * 4 + c] = acc / div;
+          acc += read[(row + clamp(x + r + 1, w)) * 4 + c] - read[(row + clamp(x - r, w)) * 4 + c];
         }
       }
-      for (let x = 0; x < w; x++) b[(row + x) * 4 + 3] = a[(row + x) * 4 + 3];
     }
-    // Vertical sliding window.
-    const out = pass === 2 ? new Uint8ClampedArray(src.length) : null;
-    const dst: Float32Array | Uint8ClampedArray = out ?? new Float32Array(src.length);
     for (let x = 0; x < w; x++) {
       for (let c = 0; c < 3; c++) {
         let acc = 0;
-        for (let i = -r; i <= r; i++) acc += b[(clamp(i, h) * w + x) * 4 + c];
+        for (let i = -r; i <= r; i++) acc += write[(clamp(i, h) * w + x) * 4 + c];
         for (let y = 0; y < h; y++) {
-          dst[(y * w + x) * 4 + c] = acc / div;
-          acc += b[(clamp(y + r + 1, h) * w + x) * 4 + c] - b[(clamp(y - r, h) * w + x) * 4 + c];
+          read[(y * w + x) * 4 + c] = acc / div;
+          acc +=
+            write[(clamp(y + r + 1, h) * w + x) * 4 + c] - write[(clamp(y - r, h) * w + x) * 4 + c];
         }
       }
     }
-    if (out) {
-      for (let i = 0; i < src.length; i += 4) out[i + 3] = src[i + 3];
-      for (let y = 0; y < h; y++) onRow?.(y + 1, h, out, w, h);
-      return out;
-    }
-    const t = a;
-    a = b;
-    b = t;
   }
-  return copyOf(src);
+  const out = new Uint8ClampedArray(src.length);
+  for (let i = 0; i < src.length; i++) out[i] = read[i];
+  for (let i = 3; i < out.length; i += 4) out[i] = src[i];
+  for (let y = 0; y < h; y++) onRow?.(y + 1, h, out, w, h);
+  return out;
 }
 
 function glowEffect(
@@ -327,16 +357,22 @@ export const EFFECT_DEFS: EffectDef[] = [
   },
 ];
 
-/** Default params for an effect type (empty record for unknown types). */
+function effectFunction(type: string): (typeof APPLY)[string] {
+  if (typeof type !== "string" || !Object.hasOwn(APPLY, type)) {
+    throw new TypeError(`unknown effect type: ${type}`);
+  }
+  return APPLY[type];
+}
+
+/** Default params for an effect type. */
 export function defaultEffectParams(type: string): EffectParams {
-  const def = EFFECT_DEFS.find((d) => d.type === type);
-  if (!def) return {};
+  const def = effectDef(type);
   const params: EffectParams = {};
   for (const p of def.params) params[p.key] = p.def;
   return params;
 }
 
-/** Apply one effect; unknown types pass through untouched. */
+/** Apply one effect. */
 export function applyEffect(
   src: Uint8ClampedArray,
   w: number,
@@ -345,11 +381,28 @@ export function applyEffect(
   params: EffectParams,
   onRow?: RowProgress,
 ): Uint8ClampedArray {
-  const fn = APPLY[type];
-  return fn ? fn(src, w, h, params, onRow) : copyOf(src);
+  assertRGBBuffer(src, w, h, 4);
+  const normalized = normalizeParams(type, params);
+  const fn = effectFunction(type);
+  if (isIdentityEffect(type, normalized)) return copyOf(src);
+  const safe = nearestVisibleRGBA(src, w, h);
+  const working = premultiplyRGBA(safe);
+  const progress = onRow
+    ? (
+        done: number,
+        total: number,
+        out: Uint8Array | Uint8ClampedArray,
+        width: number,
+        height: number,
+      ) => {
+        onRow(done, total, unpremultiplyRGBA(out as Uint8ClampedArray, src), width, height);
+      }
+    : undefined;
+  const result = fn(working, w, h, normalized, progress);
+  return unpremultiplyRGBA(result, src);
 }
 
-/** Run the enabled chain in order; disabled and unknown entries are no-ops. */
+/** Run the enabled chain in order. */
 export function applyEffects(
   src: Uint8ClampedArray,
   w: number,
@@ -357,9 +410,18 @@ export function applyEffects(
   effects: EffectInstance[],
   onRow?: RowProgress,
 ): Uint8ClampedArray {
+  assertRGBBuffer(src, w, h, 4);
+  if (!Array.isArray(effects)) throw new TypeError("effects must be an array");
   let buf = copyOf(src);
-  for (const e of effects) {
-    if (e.enabled) buf = applyEffect(buf, w, h, e.type, e.params, onRow);
+  for (const effect of effects) {
+    if (typeof effect !== "object" || effect === null) {
+      throw new TypeError("effect entries must be objects");
+    }
+    if (typeof effect.enabled !== "boolean")
+      throw new TypeError("effect.enabled must be a boolean");
+    if (!effect.enabled) continue;
+    const params = normalizeParams(effect.type, effect.params);
+    buf = applyEffect(buf, w, h, effect.type, params, onRow);
   }
   return buf;
 }

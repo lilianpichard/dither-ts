@@ -1,6 +1,9 @@
 import * as React from "react";
 import { CloudUpload, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
+import { canOpenFiles } from "@/desktop/bridge";
+import { openFailure, openImage } from "@/desktop/files";
 import { cn } from "@/lib/utils";
 
 interface ImageDropzoneProps {
@@ -35,12 +38,23 @@ export function ImageDropzone({
   const dragCount = React.useRef(0);
   const [dragging, setDragging] = React.useState(false);
   const inactive = disabled || busy;
+  // The desktop shell has a real dialog; a browser still needs the file input.
+  const native = React.useMemo(canOpenFiles, []);
 
   const handleFile = (file: File | undefined | null) => {
     if (!file || inactive) return;
     if (!file.type.startsWith("image/")) return;
     onFile(file);
   };
+
+  async function pick() {
+    try {
+      const file = await openImage();
+      if (file) handleFile(file);
+    } catch (error) {
+      toast.error(`Could not open that image: ${openFailure(error)}`);
+    }
+  }
 
   return (
     <div
@@ -68,7 +82,10 @@ export function ImageDropzone({
       <button
         type="button"
         disabled={inactive}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => {
+          if (native) void pick();
+          else inputRef.current?.click();
+        }}
         aria-label={busy ? busyLabel : label}
         className={cn(
           "flex w-full cursor-pointer items-center gap-2.5 rounded-md border border-dashed px-3 py-2 text-left transition-colors",

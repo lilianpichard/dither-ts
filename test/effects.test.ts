@@ -45,9 +45,9 @@ describe("effect registry", () => {
     }
   });
 
-  it("builds default params, empty for unknown types", () => {
+  it("builds default params and rejects unknown types", () => {
     assert.deepEqual(defaultEffectParams("glow"), { radius: 4, intensity: 30 });
-    assert.deepEqual(defaultEffectParams("Nope"), {});
+    assert.throws(() => defaultEffectParams("Nope"), /effect/i);
   });
 });
 
@@ -68,14 +68,115 @@ describe("effect identity cases", () => {
     });
   }
 
-  it("unknown types pass through untouched", () => {
+  it("rejects unknown and inherited effect types", () => {
     const src = pattern();
-    assert.deepEqual(Array.from(applyEffect(src, 8, 8, "Nope", {})), Array.from(src));
+    for (const type of ["Nope", "toString", "__proto__", "constructor"]) {
+      assert.throws(() => applyEffect(src, 8, 8, type, {}), /effect/i);
+    }
+  });
+
+  it("keeps partial-alpha bytes exact for no-op and disabled effects", () => {
+    const src = new Uint8ClampedArray([1, 2, 3, 127, 250, 251, 252, 1]);
+    assert.deepEqual(Array.from(applyEffect(src, 2, 1, "blur", { radius: 0 })), Array.from(src));
+    const disabled: EffectInstance = {
+      type: "grain",
+      params: { amount: 10, seed: 1 },
+      enabled: false,
+    };
+    assert.deepEqual(Array.from(applyEffects(src, 2, 1, [disabled])), Array.from(src));
+  });
+
+  it("skips disabled entries before validating their effect definition", () => {
+    const src = new Uint8ClampedArray([1, 2, 3, 127]);
+    const disabled = { type: "Nope", params: {}, enabled: false } as unknown as EffectInstance;
+    assert.deepEqual(Array.from(applyEffects(src, 1, 1, [disabled])), Array.from(src));
+  });
+
+  it("keeps a rounded-zero aberration exact", () => {
+    const src = new Uint8ClampedArray([1, 2, 3, 127]);
+    assert.deepEqual(
+      Array.from(applyEffect(src, 1, 1, "chromatic-aberration", { offset: 0.1 })),
+      Array.from(src),
+    );
+  });
+
+  it("keeps transparent RGB from changing visible blur results", () => {
+    const make = (transparentRed: number): Uint8ClampedArray =>
+      new Uint8ClampedArray([255, 0, 0, 255, transparentRed, 0, 0, 0, 0, 0, 255, 255]);
+    const first = applyEffect(make(0), 3, 1, "blur", { radius: 1 });
+    const poisoned = applyEffect(make(255), 3, 1, "blur", { radius: 1 });
+    assert.deepEqual(Array.from(first.slice(0, 4)), Array.from(poisoned.slice(0, 4)));
+    assert.deepEqual(Array.from(first.slice(8, 12)), Array.from(poisoned.slice(8, 12)));
+    assert.deepEqual(Array.from(first.filter((_, index) => index % 4 === 3)), [255, 0, 255]);
+  });
+
+  it("keeps partial alpha and ignores transparent RGB through effects", () => {
+    const make = (transparentRed: number): Uint8ClampedArray =>
+      new Uint8ClampedArray([0, 0, 255, 255, transparentRed, 0, 0, 0, 10, 20, 30, 127]);
+    const first = applyEffect(make(0), 3, 1, "blur", { radius: 1 });
+    const poisoned = applyEffect(make(255), 3, 1, "blur", { radius: 1 });
+    assert.deepEqual(Array.from(first.slice(8, 12)), Array.from(poisoned.slice(8, 12)));
+    assert.equal(first[11], 127);
+    assert.equal(poisoned[11], 127);
   });
 
   it("sharpen keeps flat fields flat", () => {
     const src = rgba([128, 128, 128], 4, 4);
     assert.deepEqual(Array.from(applyEffect(src, 4, 4, "sharpen", { amount: 2 })), Array.from(src));
+  });
+
+  it("blur repeats horizontal and vertical passes and preserves alpha", () => {
+    const src = new Uint8ClampedArray([
+      0, 0, 0, 1, 100, 20, 30, 2, 0, 0, 0, 3, 0, 0, 0, 4, 200, 40, 60, 5, 0, 0, 0, 6, 0, 0, 0, 7, 0,
+      0, 0, 8, 0, 0, 0, 9,
+    ]);
+    const transposed = new Uint8ClampedArray(src.length);
+    for (let y = 0; y < 3; y++) {
+      for (let x = 0; x < 3; x++) {
+        const source = (y * 3 + x) * 4;
+        const target = (x * 3 + y) * 4;
+        for (let c = 0; c < 4; c++) transposed[target + c] = src[source + c];
+      }
+    }
+    const out = applyEffect(src, 3, 3, "blur", { radius: 1 });
+    const outTransposed = applyEffect(transposed, 3, 3, "blur", { radius: 1 });
+    for (let y = 0; y < 3; y++) {
+      for (let x = 0; x < 3; x++) {
+        const source = (y * 3 + x) * 4;
+        const target = (x * 3 + y) * 4;
+        for (let c = 0; c < 3; c++) assert.equal(outTransposed[target + c], out[source + c]);
+      }
+    }
+    for (let i = 3; i < out.length; i += 4) assert.equal(out[i], src[i]);
+  });
+
+  it("rejects malformed buffers and non-finite effect parameters", () => {
+    const src = pattern(2, 2);
+    assert.throws(() => applyEffect(new Uint8ClampedArray(3), 1, 1, "blur", { radius: 1 }));
+    assert.throws(() => applyEffect(src, 2, 2, "blur", { radius: Number.NaN }));
+    assert.throws(() =>
+      applyEffect(src, 2, 2, "grain", { amount: 1, seed: Number.POSITIVE_INFINITY }),
+    );
+    assert.throws(() => applyEffect(src, 2, 2, "blur", { radius: "1" as unknown as number }));
+  });
+
+  it("bounds negative effect values to their no-op limits", () => {
+    const src = pattern(4, 4);
+    assert.deepEqual(
+      Array.from(applyEffect(src, 4, 4, "glow", { radius: 1, intensity: -1 })),
+      Array.from(src),
+    );
+    assert.deepEqual(
+      Array.from(applyEffect(src, 4, 4, "chromatic-aberration", { offset: -1 })),
+      Array.from(src),
+    );
+  });
+
+  it("caps effect values at their schema maxima", () => {
+    const src = pattern(16, 1);
+    const capped = applyEffect(src, 16, 1, "chromatic-aberration", { offset: 12 });
+    const oversized = applyEffect(src, 16, 1, "chromatic-aberration", { offset: 100 });
+    assert.deepEqual(Array.from(oversized), Array.from(capped));
   });
 });
 
@@ -158,11 +259,11 @@ describe("effect chains", () => {
     assert.notDeepEqual(a, b);
   });
 
-  it("unknown chain entries are no-ops", () => {
+  it("rejects unknown chain entries", () => {
     const src = pattern();
-    assert.deepEqual(
-      Array.from(applyEffects(src, 8, 8, [{ type: "Nope", params: {}, enabled: true }])),
-      Array.from(src),
+    assert.throws(
+      () => applyEffects(src, 8, 8, [{ type: "Nope", params: {}, enabled: true }]),
+      /effect/i,
     );
   });
 

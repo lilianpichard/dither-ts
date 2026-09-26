@@ -155,21 +155,40 @@ export default function CanvasViewport({
     setView((v) => ({ ...v, ox: d.ox + (e.clientX - d.x), oy: d.oy + (e.clientY - d.y) }));
   }
 
-  function onPointerUp() {
+  // Cancel and lost capture both end the drag, otherwise the view keeps panning.
+  function endDrag() {
     dragRef.current = null;
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+    <div className="flex min-h-0 min-w-0 flex-col gap-2 lg:flex-1">
       <div className="flex flex-wrap items-center gap-2">
-        <Button size="icon" variant="outline" title="Zoom out (-)" onClick={() => zoomAt(1 / 1.25)}>
+        <Button
+          size="icon"
+          variant="outline"
+          aria-label="Zoom out"
+          title="Zoom out (-)"
+          onClick={() => zoomAt(1 / 1.25)}
+        >
           <ZoomOut />
         </Button>
         <Badge variant="secondary">{Math.round(view.scale * 100)}%</Badge>
-        <Button size="icon" variant="outline" title="Zoom in (+)" onClick={() => zoomAt(1.25)}>
+        <Button
+          size="icon"
+          variant="outline"
+          aria-label="Zoom in"
+          title="Zoom in (+)"
+          onClick={() => zoomAt(1.25)}
+        >
           <ZoomIn />
         </Button>
-        <Button size="icon" variant="outline" title="Fit (0)" onClick={fit}>
+        <Button
+          size="icon"
+          variant="outline"
+          aria-label="Fit to view"
+          title="Fit (0)"
+          onClick={fit}
+        >
           <Maximize />
         </Button>
         <Button
@@ -178,21 +197,29 @@ export default function CanvasViewport({
           onPointerDown={() => setComparing(true)}
           onPointerUp={() => setComparing(false)}
           onPointerLeave={() => setComparing(false)}
+          onPointerCancel={() => setComparing(false)}
         >
           <Eye /> Compare
         </Button>
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+        <span className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex">
           <Kbd>C</Kbd> compare <Kbd>+</Kbd>
           <Kbd>-</Kbd> zoom <Kbd>0</Kbd> fit
         </span>
       </div>
-      <div ref={containerRef} className="min-h-0 flex-1 overflow-hidden rounded border">
+      <div
+        ref={containerRef}
+        className="h-72 shrink-0 overflow-hidden rounded border sm:h-96 lg:h-auto lg:min-h-0 lg:flex-1"
+      >
         <canvas
           ref={canvasRef}
-          className="block h-full w-full cursor-grab active:cursor-grabbing"
+          role="img"
+          aria-label="Dithered image preview"
+          className="block h-full w-full cursor-grab touch-none active:cursor-grabbing"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onLostPointerCapture={endDrag}
           onDoubleClick={fit}
         />
       </div>

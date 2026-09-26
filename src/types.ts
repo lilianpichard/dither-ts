@@ -1,6 +1,9 @@
 // Shared kernel types.
 
 import type { RGB } from "./palettes.js";
+import { METHOD_REGISTRY, type DitherMethod } from "./methods.js";
+
+export type { DitherMethod } from "./methods.js";
 
 /** Single-channel image. data length = width*height, values 0..255. */
 export interface GrayImage {
@@ -16,41 +19,26 @@ export interface RGBImage {
   data: Float32Array;
 }
 
+/** Packed RGBA image. data length = width*height*4, values 0..255. */
+export interface RGBAImage {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray;
+}
+
 /** Threshold rule shared by every B&W kernel: 255 iff value > t. */
 export function quantizeBW(value: number, threshold: number): 0 | 255 {
   return value > threshold ? 255 : 0;
 }
 
-/** All dither method names, in stable display order. "None" passes through. */
-export const METHOD_NAMES: readonly string[] = [
-  "None",
-  "Bayer 2x2",
-  "Bayer 4x4",
-  "Bayer 8x8",
-  "Clustered-Dot",
-  "Halftone",
-  "Blue-Noise",
-  "Void-and-Cluster",
-  "Pattern",
-  "Crosshatch",
-  "Floyd-Steinberg",
-  "Atkinson",
-  "Sierra",
-  "Sierra-Lite",
-  "Jarvis-Judice-Ninke",
-  "Stucki",
-  "Nakano",
-  "Burkes",
-  "Stevenson-Arce",
-  "Ostromoukhov",
-  "Variable-Error",
-  "Dot-Diffusion",
-  "Riemersma",
-  "Blue-Noise Mask",
-];
+export const METHOD_NAMES: readonly DitherMethod[] = Object.freeze(
+  Object.keys(METHOD_REGISTRY) as DitherMethod[],
+);
 
 /** Palette reference: registered name or explicit color list. */
 export type PaletteRef = string | RGB[];
+
+export type PixelMask = Uint8Array | Uint8ClampedArray;
 
 /**
  * Row progress hook: completed rows, total rows, live output buffer and
@@ -67,7 +55,7 @@ export type RowProgress = (
 
 /** Options for the single pipeline entry point. */
 export interface DitherOptions {
-  method?: string;
+  method?: DitherMethod;
   threshold?: number;
   palette?: PaletteRef;
   /** Downscale-dither-upscale factor (>=1). Enlarges the visible dots. */
@@ -76,6 +64,12 @@ export interface DitherOptions {
   preview?: boolean;
   /** Threshold-field shift for animated ordered variation (0 = unshifted). */
   seed?: number;
+  /** Nonzero bytes mark active pixels. */
+  mask?: PixelMask;
   /** Called per completed row; rows below `done` are final. */
   onProgress?: RowProgress;
+}
+
+export interface DitherRGBAOptions extends DitherOptions {
+  color: boolean;
 }

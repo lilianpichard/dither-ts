@@ -17,19 +17,31 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+            electron/package-lock.json
       - run: npm ci
-      - run: npm test
-      - run: npx prettier --check .
-      - run: npx oxlint
       - run: npm ci --prefix app
+      - run: npm ci --prefix electron
+      - run: npm run typecheck
       - run: npm --prefix app run typecheck
-      - run: npm --prefix app test -- --run
-      - run: npm --prefix app run build
+      - run: npm run test:all
+      - run: npm run coverage:all
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run build:all
       - name: No absolute asset paths (Electron file:// compat)
         run: |
           if grep -Eq '(src|href)="/' app/dist/index.html; then
             echo "absolute asset path breaks file:// loading"; exit 1
           fi
-      - run: npm ci --prefix electron
       # --no-sandbox: runners lack the SUID sandbox helper setup.
-      - run: npx --prefix electron electron --no-sandbox --version
+      - run: npm --prefix electron exec -- electron --no-sandbox --version
+      - name: Package and smoke the desktop app
+        run: |
+          if command -v xvfb-run >/dev/null 2>&1; then
+            xvfb-run -a npm --prefix electron run smoke
+          else
+            npm --prefix electron run smoke
+          fi

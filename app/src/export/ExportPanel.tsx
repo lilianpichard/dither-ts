@@ -1,15 +1,31 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { DEFAULT_CHARSET, exportSVG, exportTXT } from "../../../src/index.js";
+import { renderImage } from "../worker/client";
 import { useApp } from "../store";
-import { downloadText, downloadUrl } from "../lib/download";
+import { announceProgress } from "../progress";
+import { saveBlob, saveText, type SaveOutcome } from "../desktop/save";
+import {
+  buildExportRenderRequest,
+  canExport,
+  nextExportProgress,
+  runExportAction,
+} from "./request";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+
+interface ExportImage {
+  data: Uint8ClampedArray<ArrayBuffer>;
+  width: number;
+  height: number;
+}
 
 function rgbaToGray(rgba: Uint8ClampedArray): Uint8Array {
   const out = new Uint8Array((rgba.length / 4) | 0);
@@ -20,101 +36,154 @@ function rgbaToGray(rgba: Uint8ClampedArray): Uint8Array {
 }
 
 export default function ExportPanel() {
+  const source = useApp((s) => s.source);
+  const params = useApp((s) => s.params);
+  const effects = useApp((s) => s.effects);
+  const operations = useApp((s) => s.operations);
   const result = useApp((s) => s.result);
+  const rendering = useApp((s) => s.rendering);
   const [cell, setCell] = useState(8);
   const [charset, setCharset] = useState(DEFAULT_CHARSET);
   const [invert, setInvert] = useState(false);
   const [black, setBlack] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const exportLock = useRef(false);
+  const exportAbort = useRef<AbortController | null>(null);
+  const exportReady = canExport(result, rendering, exporting);
+  const live = announceProgress({
+    label: "Export",
+    running: exporting,
+    done: exportProgress,
+    total: 100,
+  });
 
-  function current(): {
-    data: Uint8ClampedArray<ArrayBuffer>;
-    width: number;
-    height: number;
-  } | null {
-    if (!result) return null;
-    return {
-      data: new Uint8ClampedArray(result.pixels.slice(0)),
-      width: result.width,
-      height: result.height,
-    };
+  useEffect(() => {
+    return () => exportAbort.current?.abort();
+  }, []);
+
+  async function runExport(
+    success: string,
+    action: (image: ExportImage, signal: AbortSignal) => SaveOutcome | Promise<SaveOutcome>,
+  ): Promise<void> {
+    if (!source || !exportReady || exportLock.current) return;
+    exportLock.current = true;
+    setExporting(true);
+    setExportProgress(0);
+    const controller = new AbortController();
+    exportAbort.current = controller;
+    try {
+      const request = buildExportRenderRequest(source, params, effects, operations);
+      const response = await renderImage(
+        request,
+        [request.pixels],
+        (update) => {
+          if (controller.signal.aborted) return;
+          setExportProgress((current) =>
+            nextExportProgress(update.rowsDone, update.totalRows, current),
+          );
+        },
+        { signal: controller.signal },
+      );
+      if (controller.signal.aborted) return;
+      setExportProgress(100);
+      let outcome: SaveOutcome = "saved";
+      const completed = await runExportAction(
+        {
+          data: new Uint8ClampedArray(response.pixels.slice(0)),
+          width: response.width,
+          height: response.height,
+        },
+        controller.signal,
+        async (image, signal) => {
+          outcome = await action(image, signal);
+        },
+      );
+      // A cancelled save dialog is not a success, so it stays quiet.
+      if (!completed || outcome !== "saved") return;
+      toast.success(success);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        toast.error(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    } finally {
+      if (exportAbort.current === controller) exportAbort.current = null;
+      exportLock.current = false;
+      setExporting(false);
+    }
   }
 
   function raster(mime: string, ext: string, quality?: number) {
-    const cur = current();
-    if (!cur) return;
-    const canvas = document.createElement("canvas");
-    canvas.width = cur.width;
-    canvas.height = cur.height;
-    const ctx = canvas.getContext("2d")!;
-    if (mime === "image/jpeg") {
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, cur.width, cur.height);
-    }
-    ctx.putImageData(new ImageData(cur.data, cur.width, cur.height), 0, 0);
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          downloadUrl(URL.createObjectURL(blob), `dither.${ext}`);
-          toast.success(`Exported dither.${ext}`);
-        }
-      },
-      mime,
-      quality,
-    );
+    return runExport(`Exported dither.${ext}`, async (cur, signal) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = cur.width;
+      canvas.height = cur.height;
+      const ctx = canvas.getContext("2d")!;
+      if (mime === "image/jpeg") {
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, cur.width, cur.height);
+      }
+      ctx.putImageData(new ImageData(cur.data, cur.width, cur.height), 0, 0);
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, mime, quality);
+      });
+      if (signal.aborted) return "cancelled";
+      if (!blob) throw new Error("image encoding failed");
+      return saveBlob(`dither.${ext}`, blob);
+    });
   }
 
   function svg() {
-    const cur = current();
-    if (!cur) return;
-    downloadText(
-      exportSVG(cur.data, cur.width, cur.height, { black }),
-      "dither.svg",
-      "image/svg+xml",
+    return runExport("Exported dither.svg", (cur) =>
+      saveText(
+        exportSVG(cur.data, cur.width, cur.height, { black }),
+        "dither.svg",
+        "image/svg+xml",
+      ),
     );
-    toast.success("Exported dither.svg");
   }
 
   function txt() {
-    const cur = current();
-    if (!cur) return;
-    downloadText(
-      exportTXT(rgbaToGray(cur.data), cur.width, cur.height, {
-        cell,
-        charset: charset || DEFAULT_CHARSET,
-        invert,
-      }),
-      "dither.txt",
-      "text/plain",
+    return runExport("Exported dither.txt", (cur) =>
+      saveText(
+        exportTXT(rgbaToGray(cur.data), cur.width, cur.height, {
+          cell,
+          charset: charset || DEFAULT_CHARSET,
+          invert,
+        }),
+        "dither.txt",
+        "text/plain",
+      ),
     );
-    toast.success("Exported dither.txt");
   }
 
   return (
-    <Card className="h-full overflow-y-auto">
+    <Card className="overflow-y-auto lg:h-full">
       <CardHeader>
         <CardTitle>Export</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          <Button disabled={!result} onClick={() => raster("image/png", "png")}>
+          <Button disabled={!exportReady} onClick={() => void raster("image/png", "png")}>
             PNG
           </Button>
-          <Button disabled={!result} onClick={() => raster("image/jpeg", "jpg", 0.92)}>
+          <Button disabled={!exportReady} onClick={() => void raster("image/jpeg", "jpg", 0.92)}>
             JPG
           </Button>
-          <Button disabled={!result} onClick={svg}>
+          <Button disabled={!exportReady} onClick={() => void svg()}>
             SVG
           </Button>
           <div className="flex items-center gap-2">
             <Switch id="black-vector" checked={black} onCheckedChange={setBlack} />
             <Label htmlFor="black-vector">Black vector</Label>
           </div>
-          <Button disabled={!result} onClick={txt}>
+          <Button disabled={!exportReady} onClick={() => void txt()}>
             TXT
           </Button>
           <div className="flex items-center gap-2">
-            <Label>Cell {cell}</Label>
+            <Label id="cell-label">Cell {cell}</Label>
             <Slider
+              aria-labelledby="cell-label"
               className="w-28"
               min={2}
               max={16}
@@ -138,7 +207,18 @@ export default function ExportPanel() {
             <Label htmlFor="invert">Invert</Label>
           </div>
         </div>
-        {!result && (
+        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+          {live}
+        </div>
+        {exporting && (
+          <div aria-busy className="flex flex-col gap-1">
+            <Badge aria-hidden variant="secondary">
+              Exporting {Math.round(exportProgress)}%
+            </Badge>
+            <Progress aria-label="Export progress" value={exportProgress} max={100} />
+          </div>
+        )}
+        {!exporting && !exportReady && (
           <Empty>
             <EmptyHeader>
               <EmptyTitle>Nothing to export</EmptyTitle>

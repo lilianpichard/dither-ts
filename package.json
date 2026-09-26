@@ -5,10 +5,17 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "build:all": "npm run build && npm --prefix app run build",
+    "coverage:all": "npm run coverage:node && npm run coverage:app",
+    "coverage:app": "npm --prefix app run coverage",
+    "coverage:node": "npm run build && c8 --all --include=\"dist/src/**/*.js\" --exclude=\"dist/test/**\" --reporter=text --reporter=lcov --check-coverage --lines=20 --functions=20 --branches=10 --statements=20 node --test dist/test/*.test.js",
     "dev": "npm --prefix app run dev",
     "desktop": "npm --prefix app run build && npm --prefix electron run dev",
-    "start": "npx --yes serve .",
+    "start": "serve .",
     "test": "npm run build && node --test dist/test/*.test.js",
+    "test:all": "npm test && npm --prefix app test && npm --prefix electron test",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm --prefix app run typecheck && npm run test:all && npm run coverage:all && npm run lint && npm run format:check && npm run build:all",
     "demo": "npm run build && node dist/test/smoke.js",
     "bench": "npm run build && node dist/test/bench.js",
     "lint": "oxlint",
@@ -25,10 +32,12 @@
   "devDependencies": {
     "@shadcn/lint": "^0.2.0",
     "@types/node": "^22.7.0",
+    "c8": "^12.0.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.5.1",
-    "oxlint": "^1.83.0",
-    "prettier": "^3.9.8",
+    "oxlint": "^1.85.0",
+    "prettier": "^3.9.9",
+    "serve": "^14.2.6",
     "typescript": "^7.0.2"
   }
 }

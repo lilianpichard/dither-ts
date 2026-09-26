@@ -1,5 +1,7 @@
-import { METHOD_NAMES, PALETTES } from "../../../src/index.js";
+import { METHOD_NAMES, PALETTES, type DitherMethod } from "../../../src/index.js";
 import { useApp } from "../store";
+import { describeRenderStatus } from "../status";
+import PaletteEditor from "../palette/PaletteEditor";
 import { ImageDropzone } from "./ImageDropzone";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,23 +24,27 @@ export default function ControlPanel({ onFile }: { onFile: (f: File | undefined)
   const rendering = useApp((s) => s.rendering);
   const previewScaled = useApp((s) => s.previewScaled);
   const setParams = useApp((s) => s.setParams);
+  const status = describeRenderStatus({
+    hasSource: source !== null,
+    rendering,
+    ms: result?.ms ?? null,
+    previewScaled,
+  });
 
   return (
-    <Card className="flex h-full w-72 shrink-0 flex-col overflow-hidden">
+    <Card className="flex w-full flex-col overflow-hidden lg:h-full lg:w-72">
       <CardHeader>
         <CardTitle>Controls</CardTitle>
       </CardHeader>
-      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
-        <ImageDropzone
-          onFile={(f) => void onFile(f)}
-          fileName={source?.name}
-          busy={rendering}
-          busyLabel="Rendering…"
-        />
+      <CardContent className="flex flex-col gap-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        <ImageDropzone onFile={(f) => void onFile(f)} fileName={source?.name} />
         <div className="flex flex-col gap-2">
-          <Label>Method</Label>
-          <Select value={params.method} onValueChange={(v) => setParams({ method: v })}>
-            <SelectTrigger>
+          <Label htmlFor="ctl-method">Method</Label>
+          <Select
+            value={params.method}
+            onValueChange={(value) => setParams({ method: value as DitherMethod })}
+          >
+            <SelectTrigger id="ctl-method">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -60,14 +66,14 @@ export default function ControlPanel({ onFile }: { onFile: (f: File | undefined)
         </div>
         {params.color && (
           <div className="flex flex-col gap-2">
-            <Label>Palette</Label>
+            <Label htmlFor="ctl-palette">Palette</Label>
             <Select
               value={typeof params.palette === "string" ? params.palette : "custom"}
               onValueChange={(v) => {
                 if (v !== "custom") setParams({ palette: v });
               }}
             >
-              <SelectTrigger>
+              <SelectTrigger id="ctl-palette">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -83,12 +89,14 @@ export default function ControlPanel({ onFile }: { onFile: (f: File | undefined)
                 )}
               </SelectContent>
             </Select>
+            <PaletteEditor />
           </div>
         )}
         {!params.color && (
           <div className="flex flex-col gap-2">
-            <Label>Threshold {params.threshold}</Label>
+            <Label id="ctl-threshold-label">Threshold {params.threshold}</Label>
             <Slider
+              aria-labelledby="ctl-threshold-label"
               min={1}
               max={254}
               value={[params.threshold]}
@@ -97,8 +105,9 @@ export default function ControlPanel({ onFile }: { onFile: (f: File | undefined)
           </div>
         )}
         <div className="flex flex-col gap-2">
-          <Label>Pixel size {params.pixelSize}</Label>
+          <Label id="ctl-pixel-size-label">Pixel size {params.pixelSize}</Label>
           <Slider
+            aria-labelledby="ctl-pixel-size-label"
             min={1}
             max={8}
             step={1}
@@ -106,14 +115,9 @@ export default function ControlPanel({ onFile }: { onFile: (f: File | undefined)
             onValueChange={([v]) => setParams({ pixelSize: v })}
           />
         </div>
-        <Badge variant={rendering ? "secondary" : "default"} className="w-fit">
-          {!source
-            ? "No image"
-            : rendering
-              ? "Rendering…"
-              : result
-                ? `Done in ${result.ms.toFixed(1)} ms${previewScaled ? " · preview scaled" : ""}`
-                : "Ready"}
+        {/* The live region in App announces this text; hide the duplicate. */}
+        <Badge aria-hidden variant={rendering ? "secondary" : "default"} className="w-fit">
+          {status}
         </Badge>
       </CardContent>
     </Card>

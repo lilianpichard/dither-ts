@@ -108,6 +108,46 @@ describe("SVG output", () => {
     assert.ok(svg.includes('fill="#000"'));
     assert.ok(!svg.includes("#fafafa"));
   });
+
+  it("validates SVG dimensions and RGBA buffers", () => {
+    assert.throws(() => exportSVG(new Uint8ClampedArray(4), 0, 1));
+    assert.throws(() => exportSVG(new Uint8ClampedArray(3), 1, 1));
+    assert.throws(() => exportSVG(new Uint8Array(4) as unknown as Uint8ClampedArray, 1, 1));
+  });
+
+  it("does not emit transparent pixels", () => {
+    const rgba = new Uint8ClampedArray([255, 0, 0, 0]);
+    const svg = exportSVG(rgba, 1, 1);
+    assert.ok(!svg.includes("#ff0000"));
+    assert.ok(!svg.includes("<rect"));
+  });
+
+  it("preserves partial alpha in color and black SVG output", () => {
+    const color = exportSVG(new Uint8ClampedArray([255, 0, 0, 128]), 1, 1);
+    const colorOpacity = color.match(/fill-opacity="([^"]+)"/);
+    assert.ok(colorOpacity);
+    assert.ok(Math.abs(Number(colorOpacity[1]) - 128 / 255) < 1e-6);
+
+    const black = exportSVG(new Uint8ClampedArray([0, 0, 0, 64]), 1, 1, { black: true });
+    const blackOpacity = black.match(/fill-opacity="([^"]+)"/);
+    assert.ok(blackOpacity);
+    assert.ok(Math.abs(Number(blackOpacity[1]) - 64 / 255) < 1e-6);
+
+    const white = exportSVG(new Uint8ClampedArray([0, 0, 0, 255, 255, 255, 255, 128]), 2, 1);
+    assert.ok(white.includes("#ffffff"));
+    assert.match(white, /fill-opacity="0\.5019607843137255"/);
+  });
+
+  it("escapes XML attributes and rejects unsafe colors", () => {
+    const rgba = new Uint8ClampedArray([0, 0, 0, 255]);
+    assert.throws(() => exportSVG(rgba, 1, 1, { ink: 'red" onload="alert(1)' }), /color/i);
+    assert.throws(
+      () => exportSVG(rgba, 1, 1, { background: "url(javascript:alert(1))" }),
+      /color/i,
+    );
+    const escaped = exportSVG(rgba, 1, 1, { black: true, ink: "#000", background: "#fff" });
+    assert.ok(escaped.includes('fill="#000"'));
+  });
 });
 
 describe("TXT output", () => {
@@ -135,5 +175,20 @@ describe("TXT output", () => {
   it("accepts custom charsets", () => {
     assert.equal(exportTXT(new Uint8Array([0]), 1, 1, { cell: 1, charset: "ab" }), "a");
     assert.equal(exportTXT(new Uint8Array([255]), 1, 1, { cell: 1, charset: "ab" }), "b");
+  });
+
+  it("indexes Unicode charsets by code point", () => {
+    const out = exportTXT(new Uint8Array([0, 255]), 1, 2, { cell: 1, charset: "😀a" });
+    assert.equal(out, "😀\na");
+  });
+
+  it("rejects malformed dimensions, buffers, cells, and charsets", () => {
+    assert.throws(() => exportTXT(new Uint8Array(1), 0, 1), /width and height/i);
+    assert.throws(() => exportTXT(new Uint8Array(1), 1, 1.5), /width and height/i);
+    assert.throws(() => exportTXT(new Uint8Array(2), 1, 1), /buffer/i);
+    assert.throws(() => exportTXT(new Uint8Array(4), 2, 2, { cell: 0 }), /cell/i);
+    assert.throws(() => exportTXT(new Uint8Array(4), 2, 2, { cell: 1.5 }), /cell/i);
+    assert.throws(() => exportTXT(new Uint8Array(4), 2, 2, { cell: Number.NaN }), /cell/i);
+    assert.throws(() => exportTXT(new Uint8Array(4), 2, 2, { charset: "" }), /charset/i);
   });
 });

@@ -1,11 +1,15 @@
 // Preset JSON v1: versioned, forward-tolerant, never throws on load.
 // Unknown fields are ignored; invalid fields fall back to defaults
-// with a warning. See docs/presets.md.
+// with a warning. Legacy Dither Guy files are detected and migrated here so
+// importers have one path. See docs/presets.md.
 
-import { METHOD_NAMES } from "../../../src/index.js";
+import { EFFECT_DEFS, METHOD_NAMES } from "../../../src/index.js";
+import type { DitherMethod, EffectDef } from "../../../src/index.js";
 import { PALETTES, type RGB } from "../../../src/index.js";
-
-export const PRESET_VERSION = 1;
+import { isIdentity, sanitizeOperations } from "../image/settings";
+import type { ImageOperations } from "../image/ops";
+import { isLegacyPreset, migrateLegacyPreset } from "./legacy";
+import { PRESET_VERSION } from "./version";
 
 export interface PresetEffect {
   type: string;
@@ -16,7 +20,7 @@ export interface PresetEffect {
 export type PresetPalette = string | { custom: RGB[] };
 
 export interface PresetParams {
-  method: string;
+  method: DitherMethod;
   threshold: number;
   palette: PresetPalette;
   color: boolean;
@@ -28,6 +32,8 @@ export interface Preset {
   name: string;
   params: PresetParams;
   effects: PresetEffect[];
+  /** Pre-dither geometry and colour operations; absent means identity. */
+  operations?: ImageOperations;
 }
 
 export interface ParseResult {
@@ -47,6 +53,10 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
+function isDitherMethod(value: unknown): value is DitherMethod {
+  return typeof value === "string" && (METHOD_NAMES as readonly string[]).includes(value);
+}
+
 function validColor(v: unknown): v is RGB {
   return (
     Array.isArray(v) &&
@@ -57,7 +67,9 @@ function validColor(v: unknown): v is RGB {
 
 function parsePalette(v: unknown, warnings: string[]): PresetPalette {
   if (typeof v === "string") {
-    if (v in PALETTES) return v;
+    // Own properties only: `in` would accept "toString" and friends, handing
+    // the kernel a function where it expects colours.
+    if (Object.hasOwn(PALETTES, v)) return v;
     warnings.push(`unknown palette "${v}", using B&W`);
     return "B&W";
   }
@@ -71,25 +83,81 @@ function parsePalette(v: unknown, warnings: string[]): PresetPalette {
   return "B&W";
 }
 
+/** The kernel's effect registry, the only authority on what an effect may be. */
+const EFFECT_BY_TYPE = new Map(EFFECT_DEFS.map((def) => [def.type, def]));
+
+/**
+ * One effect's params, resolved against the kernel registry. Every declared
+ * param ends up present, finite, and inside its range; unknown names and bad
+ * values are reported rather than left to fail later inside the worker.
+ */
+function parseEffectParams(
+  def: EffectDef,
+  raw: unknown,
+  label: string,
+  warnings: string[],
+): Record<string, number> {
+  if (raw !== undefined && !isRecord(raw)) {
+    warnings.push(`effect ${label} has non-object params, using defaults`);
+  }
+  const supplied = isRecord(raw) ? raw : {};
+  const params: Record<string, number> = {};
+  for (const spec of def.params) {
+    // Own lookup, so a prototype key can never stand in for a declared param.
+    const value = Object.hasOwn(supplied, spec.key) ? supplied[spec.key] : undefined;
+    if (value === undefined) {
+      params[spec.key] = spec.def;
+      continue;
+    }
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      warnings.push(`effect ${label} param ${spec.key} is not a finite number, using ${spec.def}`);
+      params[spec.key] = spec.def;
+      continue;
+    }
+    const clamped = Math.min(spec.max, Math.max(spec.min, value));
+    if (clamped !== value) {
+      warnings.push(
+        `effect ${label} param ${spec.key} ${value} is outside ${spec.min}-${spec.max}, using ${clamped}`,
+      );
+    }
+    params[spec.key] = clamped;
+  }
+  const declared = new Set(def.params.map((spec) => spec.key));
+  for (const key of Object.keys(supplied)) {
+    if (!declared.has(key)) warnings.push(`effect ${label} has unknown param "${key}", dropping`);
+  }
+  return params;
+}
+
+/**
+ * One entry of the `effects` array. An unregistered type is dropped outright:
+ * the worker throws on one, so letting it through would break the render
+ * rather than degrade it.
+ */
 function parseEffect(v: unknown, index: number, warnings: string[]): PresetEffect | null {
   if (!isRecord(v) || typeof v.type !== "string" || v.type.length === 0) {
     warnings.push(`dropping invalid effect at index ${index}`);
     return null;
   }
-  const params: Record<string, number> = {};
-  if (isRecord(v.params)) {
-    for (const [k, val] of Object.entries(v.params)) {
-      if (typeof val === "number" && Number.isFinite(val)) params[k] = val;
-    }
+  const def = EFFECT_BY_TYPE.get(v.type);
+  if (!def) {
+    warnings.push(`unknown effect type "${v.type}" at index ${index}, dropping`);
+    return null;
   }
-  return { type: v.type, params, enabled: v.enabled !== false };
+  const label = `at index ${index} (${v.type})`;
+  let enabled = true;
+  if (Object.hasOwn(v, "enabled")) {
+    if (typeof v.enabled === "boolean") enabled = v.enabled;
+    else warnings.push(`effect ${label} has non-boolean enabled, using true`);
+  }
+  return { type: v.type, params: parseEffectParams(def, v.params, label, warnings), enabled };
 }
 
 function parseParams(v: unknown, warnings: string[]): PresetParams {
   const o = isRecord(v) ? v : {};
   if (!isRecord(v)) warnings.push("missing params, using defaults");
   let method = DEFAULTS.method;
-  if (typeof o.method === "string" && (METHOD_NAMES as readonly string[]).includes(o.method)) {
+  if (isDitherMethod(o.method)) {
     method = o.method;
   } else {
     warnings.push(`unknown method "${String(o.method)}", using Floyd-Steinberg`);
@@ -115,8 +183,22 @@ function parseParams(v: unknown, warnings: string[]): PresetParams {
   return { method, threshold, palette: parsePalette(o.palette, warnings), color, pixelSize };
 }
 
+/** Read the optional operation set; junk falls back to identity with a warning. */
+function parseOperations(v: unknown, warnings: string[]): ImageOperations | undefined {
+  if (v === undefined) return undefined;
+  if (!isRecord(v)) {
+    warnings.push("invalid operations, ignoring");
+    return undefined;
+  }
+  const operations = sanitizeOperations(v);
+  if (isIdentity(operations) && Object.keys(v).length > 0) {
+    warnings.push("no usable operations, ignoring");
+  }
+  return isIdentity(operations) ? undefined : operations;
+}
+
 /** Parse preset JSON text. Returns null preset only for non-object input. */
-export function parsePresetJson(text: string): ParseResult {
+export function parsePresetJson(text: string, nameHint?: string): ParseResult {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -124,6 +206,7 @@ export function parsePresetJson(text: string): ParseResult {
     return { preset: null, warnings: ["not valid JSON"] };
   }
   if (!isRecord(raw)) return { preset: null, warnings: ["preset must be an object"] };
+  if (isLegacyPreset(raw)) return migrateLegacyPreset(raw, nameHint);
   const warnings: string[] = [];
   if (raw.version !== PRESET_VERSION)
     warnings.push(`unsupported version, reading as v${PRESET_VERSION}`);
@@ -137,13 +220,23 @@ export function parsePresetJson(text: string): ParseResult {
       if (parsed) effects.push(parsed);
     });
   }
-  return { preset: { version: PRESET_VERSION, name, params, effects }, warnings };
+  const operations = parseOperations(raw.operations, warnings);
+  const preset: Preset = { version: PRESET_VERSION, name, params, effects };
+  if (operations) preset.operations = operations;
+  return { preset, warnings };
 }
 
-/** Serialize a preset to canonical JSON. */
+/** Serialize a preset to canonical JSON; identity operations stay out. */
 export function serializePreset(preset: Preset): string {
   return JSON.stringify(
-    { version: PRESET_VERSION, name: preset.name, params: preset.params, effects: preset.effects },
+    {
+      version: PRESET_VERSION,
+      name: preset.name,
+      params: preset.params,
+      effects: preset.effects,
+      operations:
+        preset.operations && !isIdentity(preset.operations) ? preset.operations : undefined,
+    },
     null,
     2,
   );

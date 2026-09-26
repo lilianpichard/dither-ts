@@ -3,8 +3,10 @@
 
 import type { GrayImage } from "./types.js";
 import { diffuseBW } from "./diffusion.js";
+import { assertGrayImage, assertRGBBuffer, assertThreshold } from "./validation.js";
 
 export function grayscaleFromRGB(rgb: Uint8ClampedArray, width: number, height: number): GrayImage {
+  assertRGBBuffer(rgb, width, height);
   const data = new Float32Array(width * height);
   for (let i = 0; i < width * height; i++) {
     const r = rgb[i * 3];
@@ -17,10 +19,14 @@ export function grayscaleFromRGB(rgb: Uint8ClampedArray, width: number, height: 
 
 /** Floyd-Steinberg B&W. Rule: new = 255 iff old > t. */
 export function floydSteinberg(img: GrayImage, threshold = 128): Uint8Array {
+  assertGrayImage(img);
+  assertThreshold(threshold);
   return diffuseBW(img, "Floyd-Steinberg", threshold);
 }
 
 /** Atkinson B&W. Error spread = 1/8 to 6 neighbours. */
 export function atkinson(img: GrayImage, threshold = 128): Uint8Array {
+  assertGrayImage(img);
+  assertThreshold(threshold);
   return diffuseBW(img, "Atkinson", threshold);
 }

@@ -3,6 +3,7 @@
 // against Lab, which follows human-perceived distance more closely.
 
 import type { RGB } from "./palettes.js";
+import { assertLab, assertLabPalette, assertPalette } from "./validation.js";
 
 export type Lab = [number, number, number];
 
@@ -17,7 +18,10 @@ const LAB_EPS = 0.008856;
 const LAB_KAPPA = 903.3;
 
 function linearize(v: number): number {
-  return LINEAR_LUT[Math.min(255, Math.max(0, Math.round(v)))];
+  const value = Math.min(255, Math.max(0, v));
+  if (Number.isInteger(value)) return LINEAR_LUT[value];
+  const c = value / 255;
+  return c > 0.04045 ? ((c + 0.055) / 1.055) ** 2.4 : c / 12.92;
 }
 
 /** Exact 256-entry table of the sRGB transfer curve (no per-pixel pow). */
@@ -64,8 +68,18 @@ export function labDistance2(a: Lab, b: Lab): number {
   return dl * dl + da * da + db * db;
 }
 
+function assertRGBQuery(r: number, g: number, b: number): void {
+  for (const value of [r, g, b]) {
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 255) {
+      throw new TypeError("RGB query values must be finite and between 0 and 255");
+    }
+  }
+}
+
 /** Index of the nearest palette color in RGB space. */
 export function nearestRGBIndex(r: number, g: number, b: number, palette: RGB[]): number {
+  assertRGBQuery(r, g, b);
+  assertPalette(palette);
   let best = 0;
   let bestD = Infinity;
   for (let i = 0; i < palette.length; i++) {
@@ -78,25 +92,36 @@ export function nearestRGBIndex(r: number, g: number, b: number, palette: RGB[])
   return best;
 }
 
+const LAB_CACHE_LIMIT = 64;
 const labCache = new Map<string, Lab[]>();
 
 function cacheKey(palette: RGB[]): string {
   return palette.map((c) => c.join(",")).join(";");
 }
 
-/** Palette converted to Lab, cached per palette content. */
+function copyLab(lab: Lab[]): Lab[] {
+  return lab.map(([l, a, b]) => [l, a, b]);
+}
+
 export function paletteToLab(palette: RGB[]): Lab[] {
+  assertPalette(palette);
   const key = cacheKey(palette);
   let lab = labCache.get(key);
   if (!lab) {
     lab = palette.map((c) => rgbToLab(c[0], c[1], c[2]));
+    if (labCache.size >= LAB_CACHE_LIMIT) {
+      const oldest = labCache.keys().next().value;
+      if (oldest !== undefined) labCache.delete(oldest);
+    }
     labCache.set(key, lab);
   }
-  return lab;
+  return copyLab(lab);
 }
 
 /** Index of the nearest palette color in Lab space. */
 export function nearestLabIndex(lab: Lab, paletteLab: Lab[]): number {
+  assertLab(lab);
+  assertLabPalette(paletteLab);
   let best = 0;
   let bestD = Infinity;
   for (let i = 0; i < paletteLab.length; i++) {

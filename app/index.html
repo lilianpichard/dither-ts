@@ -1,9 +1,35 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" suppressHydrationWarning>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Production policy; electron/lib/security.js holds the same copy and adds
+         frame-ancestors, which browsers ignore in a meta tag. `vite dev` swaps in a
+         relaxed one. The inline script below is allowed by hash, so editing it means
+         updating the hash here and in security.js. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'sha256-ZKcBg24qTGcXBK/iOLaJAGANYkkgaozWOfC2jbdrBTY=' 'sha256-NYTXKnI17CvCoEQFteL070w4ynkOEgG7nkOg0Gu+5ZI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' blob: data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'"
+    />
     <title>dither-ts</title>
+    <script>
+      // Applies the saved or system theme before the bundle paints; mirrors the storage key in src/providers.tsx.
+      (() => {
+        const key = "dither-ts.theme";
+        let stored = null;
+        try {
+          stored = localStorage.getItem(key);
+        } catch {
+          stored = null;
+        }
+        const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const theme = !stored || stored === "system" ? (dark ? "dark" : "light") : stored;
+        const root = document.documentElement;
+        root.classList.remove("light", "dark");
+        root.classList.add(theme === "dark" ? "dark" : "light");
+        root.style.colorScheme = theme === "dark" ? "dark" : "light";
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

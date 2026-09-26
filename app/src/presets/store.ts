@@ -1,11 +1,21 @@
 import { create } from "zustand";
 import { parsePresetJson, serializePreset, type Preset, type PresetEffect } from "./schema";
+import { PRESET_VERSION } from "./version";
+import { loadCatalog } from "./catalog";
 import { useApp, type DitherParams, type StackedEffect } from "../store";
+import { sanitizeOperations } from "../image/settings";
+import type { ImageOperations } from "../image/ops";
 
 export interface SavedPreset {
   id: string;
   favorite: boolean;
   preset: Preset;
+}
+
+/** Result of adding presets from JSON: what landed, and every warning raised. */
+export interface ImportResult {
+  added: number;
+  warnings: string[];
 }
 
 interface PresetStore {
@@ -16,7 +26,9 @@ interface PresetStore {
   rename: (id: string, name: string) => void;
   toggleFavorite: (id: string) => void;
   duplicate: (id: string) => void;
-  importJson: (text: string) => { ok: boolean; warnings: string[] };
+  importJson: (text: string, nameHint?: string) => ImportResult;
+  /** Add any bundled preset whose name is not in the gallery yet. */
+  installCatalog: () => ImportResult;
   exportJson: (id: string) => string | null;
 }
 
@@ -49,9 +61,10 @@ export function paramsToPreset(
   name: string,
   params: DitherParams,
   effects: PresetEffect[],
+  operations: ImageOperations = {},
 ): Preset {
   return {
-    version: 1,
+    version: PRESET_VERSION,
     name,
     params: {
       method: params.method,
@@ -61,13 +74,14 @@ export function paramsToPreset(
       pixelSize: params.pixelSize,
     },
     effects: effects.map((e) => ({ type: e.type, params: { ...e.params }, enabled: e.enabled })),
+    operations: sanitizeOperations(operations),
   };
 }
 
-/** Apply a preset to the main store: params plus a freshly-keyed effect stack. */
+/** Apply a preset: params, a replaced operation set, and a freshly-keyed stack. */
 export function applyPreset(preset: Preset): void {
   const { setParams, setEffects } = useApp.getState();
-  setParams(presetToParams(preset));
+  setParams(presetToParams(preset), preset.operations ?? {});
   setEffects(
     preset.effects.map((e) => ({
       key: uid(),
@@ -111,10 +125,14 @@ export const usePresets = create<PresetStore>()((set, get) => ({
     }
   },
   saveCurrent: (name, params) => {
-    const { effects } = useApp.getState();
+    const { effects, operations } = useApp.getState();
     const items = [
       ...get().items,
-      { id: uid(), favorite: false, preset: paramsToPreset(name, params, stripKeys(effects)) },
+      {
+        id: uid(),
+        favorite: false,
+        preset: paramsToPreset(name, params, stripKeys(effects), operations),
+      },
     ];
     persist(items);
     set({ items });
@@ -150,13 +168,30 @@ export const usePresets = create<PresetStore>()((set, get) => ({
     persist(items);
     set({ items });
   },
-  importJson: (text) => {
-    const { preset, warnings } = parsePresetJson(text);
-    if (!preset) return { ok: false, warnings };
+  importJson: (text, nameHint) => {
+    const { preset, warnings } = parsePresetJson(text, nameHint);
+    if (!preset) return { added: 0, warnings };
     const items = [...get().items, { id: uid(), favorite: false, preset }];
     persist(items);
     set({ items });
-    return { ok: true, warnings };
+    return { added: 1, warnings };
+  },
+  installCatalog: () => {
+    const existing = new Set(get().items.map((item) => item.preset.name));
+    const warnings: string[] = [];
+    const fresh: SavedPreset[] = [];
+    for (const { preset, warnings: entryWarnings } of loadCatalog()) {
+      if (existing.has(preset.name)) continue;
+      existing.add(preset.name);
+      fresh.push({ id: uid(), favorite: false, preset });
+      warnings.push(...entryWarnings);
+    }
+    if (fresh.length > 0) {
+      const items = [...get().items, ...fresh];
+      persist(items);
+      set({ items });
+    }
+    return { added: fresh.length, warnings };
   },
   exportJson: (id) => {
     const found = get().items.find((i) => i.id === id);

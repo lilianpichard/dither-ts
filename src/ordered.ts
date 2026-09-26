@@ -4,18 +4,36 @@
 // ordered uses a fixed 0.3 gain with RGB nearest-color matching.
 
 import type { RGB } from "./palettes.js";
-import { quantizeBW, type GrayImage, type RowProgress } from "./types.js";
+import type { OrderedMethod } from "./methods.js";
+import { quantizeBW, type GrayImage, type PixelMask, type RowProgress } from "./types.js";
 import { nearestRGBIndex } from "./color.js";
-import { BAYER_4x4, ORDERED_MATRICES, blueNoiseMask, crosshatchField } from "./matrices.js";
+import { ORDERED_MATRICES, blueNoiseMask, crosshatchField } from "./matrices.js";
+import {
+  assertDimensions,
+  assertGrayImage,
+  assertMethodFamily,
+  assertPalette,
+  assertRGBBuffer,
+  assertSeed,
+  assertThreshold,
+  resolveRowOrMask,
+} from "./validation.js";
 
-/** Names served by the static matrix registry. */
-export const MATRIX_METHODS: readonly string[] = Object.keys(ORDERED_MATRICES);
+export const MATRIX_METHODS: readonly OrderedMethod[] = Object.keys(ORDERED_MATRICES).filter(
+  (name): name is OrderedMethod => Object.hasOwn(ORDERED_MATRICES, name),
+);
+
+function seedOffset(seed: number): number {
+  return ((seed % 64) + 64) % 64;
+}
 
 /** Resolve the threshold field for any ordered-family method. */
-export function orderedField(method: string, w: number, h: number): number[][] {
+export function orderedField(method: OrderedMethod, w: number, h: number): number[][] {
+  assertMethodFamily(method, "ordered");
+  assertDimensions(w, h);
   if (method === "Crosshatch") return crosshatchField(w, h);
   if (method === "Blue-Noise Mask") return blueNoiseMask(h, w);
-  const mat = ORDERED_MATRICES[method] ?? BAYER_4x4;
+  const mat = ORDERED_MATRICES[method];
   const mh = mat.length;
   const mw = mat[0].length;
   return Array.from({ length: h }, (_, y) => {
@@ -25,32 +43,39 @@ export function orderedField(method: string, w: number, h: number): number[][] {
 }
 
 /**
- * B&W ordered dither for any ordered-family method. Unknown names fall
- * back to Bayer 4x4. `seed` shifts the threshold field for animated
- * variation; 0 is the unshifted reference. Returns Uint8 0/255.
+ * B&W ordered dither for any ordered-family method. `seed` shifts the
+ * threshold field for animated variation; 0 is the unshifted reference.
+ * Returns Uint8 0/255.
  */
 export function orderedBW(
   img: GrayImage,
-  method = "Bayer 4x4",
+  method: OrderedMethod = "Bayer 4x4",
   threshold = 128,
   seed = 0,
-  onRow?: RowProgress,
+  onRowOrMask?: RowProgress | PixelMask,
+  mask?: PixelMask,
 ): Uint8Array {
+  assertGrayImage(img);
+  assertThreshold(threshold);
+  assertSeed(seed);
   const { width: w, height: h } = img;
+  const progress = resolveRowOrMask(onRowOrMask, mask, w, h);
+  const activeMask = progress.mask;
   const field = orderedField(method, w, h);
   const gain = 1 - threshold / 255;
-  const ox = seed % 64;
-  const oy = Math.floor(seed / 64) % 64;
+  const ox = seedOffset(seed);
+  const oy = seedOffset(Math.floor(seed / 64));
   const out = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
+      if (activeMask && activeMask[i] === 0) continue;
       out[i] = quantizeBW(
         img.data[i] + (field[(y + oy) % h][(x + ox) % w] - 128) * gain,
         threshold,
       );
     }
-    onRow?.(y + 1, h, out, w, h);
+    progress.onRow?.(y + 1, h, out, w, h);
   }
   return out;
 }
@@ -59,26 +84,32 @@ export function orderedBW(
 export const PALETTE_ORDERED_GAIN = 0.3;
 
 /**
- * Palette ordered dither on RGB input. Unknown methods fall back to
- * Bayer 4x4. `seed` shifts the threshold field; 0 is unshifted.
- * Returns packed RGB bytes; every pixel is a palette member.
+ * Palette ordered dither on RGB input. `seed` shifts the threshold field;
+ * 0 is unshifted. Returns packed RGB bytes; every pixel is a palette member.
  */
 export function orderedPalette(
   rgb: Uint8ClampedArray,
   width: number,
   height: number,
   palette: RGB[],
-  method = "Bayer 4x4",
+  method: OrderedMethod = "Bayer 4x4",
   seed = 0,
-  onRow?: RowProgress,
+  onRowOrMask?: RowProgress | PixelMask,
+  mask?: PixelMask,
 ): Uint8ClampedArray {
+  assertRGBBuffer(rgb, width, height);
+  assertPalette(palette);
+  assertSeed(seed);
+  const progress = resolveRowOrMask(onRowOrMask, mask, width, height);
+  const activeMask = progress.mask;
   const field = orderedField(method, width, height);
-  const ox = seed % 64;
-  const oy = Math.floor(seed / 64) % 64;
+  const ox = seedOffset(seed);
+  const oy = seedOffset(Math.floor(seed / 64));
   const out = new Uint8ClampedArray(width * height * 3);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
+      if (activeMask && activeMask[i] === 0) continue;
       const noise = (field[(y + oy) % height][(x + ox) % width] - 128) * PALETTE_ORDERED_GAIN;
       const r = Math.min(255, Math.max(0, rgb[i * 3] + noise));
       const g = Math.min(255, Math.max(0, rgb[i * 3 + 1] + noise));
@@ -88,7 +119,7 @@ export function orderedPalette(
       out[i * 3 + 1] = p[1];
       out[i * 3 + 2] = p[2];
     }
-    onRow?.(y + 1, height, out, width, height);
+    progress.onRow?.(y + 1, height, out, width, height);
   }
   return out;
 }
