@@ -10,6 +10,8 @@ import type {
 import { quantizeBW, type GrayImage, type PixelMask, type RowProgress } from "./types.js";
 import { nearestLabIndex, paletteToLab, rgbToLab } from "./color.js";
 import { tileMatrix, DOT_CLASS } from "./matrices.js";
+import { ORIGINAL_STEP } from "./ordered.js";
+
 import {
   assertGrayImage,
   assertMethod,
@@ -439,6 +441,67 @@ export function diffusePalette(
           a[j] = clamp255(a[j] + er * wt);
           a[j + 1] = clamp255(a[j + 1] + eg * wt);
           a[j + 2] = clamp255(a[j + 2] + eb * wt);
+        }
+      }
+    }
+    progress.onRow?.(y + 1, height, out, width, height);
+  }
+  return out;
+}
+
+/**
+ * Colour error-diffusion that keeps the source palette. Each channel is
+ * posterised independently and its own error is diffused onward, so the photo
+ * keeps its own colours and only the number of levels per channel drops. This
+ * is the counterpart to `diffusePalette`, which replaces the pixel outright.
+ */
+export function diffuseOriginal(
+  rgb: Uint8ClampedArray,
+  width: number,
+  height: number,
+  method: ColorDiffusionMethod = "Floyd-Steinberg",
+  onRowOrMask?: RowProgress | PixelMask,
+  mask?: PixelMask,
+): Uint8ClampedArray {
+  assertRGBBuffer(rgb, width, height);
+  assertMethod(method, "color");
+  if (!Object.hasOwn(DIFFUSION_TABLES, method)) {
+    throw new TypeError(`method is not a diffusion kernel: ${method}`);
+  }
+
+  const progress = resolveRowOrMask(onRowOrMask, mask, width, height);
+  const activeMask = progress.mask;
+  const taps = DIFFUSION_TABLES[method];
+  const a = new Float32Array(rgb.length);
+  for (let i = 0; i < rgb.length; i++) a[i] = rgb[i];
+  const out = new Uint8ClampedArray(rgb.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      if (activeMask && activeMask[i] === 0) {
+        out[i * 3] = rgb[i * 3];
+        out[i * 3 + 1] = rgb[i * 3 + 1];
+        out[i * 3 + 2] = rgb[i * 3 + 2];
+        continue;
+      }
+      const err = [0, 0, 0];
+      for (let c = 0; c < 3; c++) {
+        const q = Math.round(a[i * 3 + c] / ORIGINAL_STEP) * ORIGINAL_STEP;
+        out[i * 3 + c] = q;
+        err[c] = a[i * 3 + c] - q;
+      }
+      for (const [dy, dx, wt] of taps) {
+        const ny = y + dy;
+        const nx = x + dx;
+        if (
+          ny >= 0 &&
+          ny < height &&
+          nx >= 0 &&
+          nx < width &&
+          (!activeMask || activeMask[ny * width + nx] !== 0)
+        ) {
+          const j = (ny * width + nx) * 3;
+          for (let c = 0; c < 3; c++) a[j + c] = clamp255(a[j + c] + err[c] * wt);
         }
       }
     }

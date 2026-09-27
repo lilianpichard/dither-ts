@@ -44,6 +44,7 @@ function request(): Omit<RenderRequest, "id"> {
     height: 1,
     pixels: new ArrayBuffer(4),
     color: false,
+    colorMode: "palette",
     method: "None",
     threshold: 128,
     palette: "B&W",

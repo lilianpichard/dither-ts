@@ -11,8 +11,8 @@ import {
   type RGBAImage,
   type RowProgress,
 } from "./types.js";
-import { SPECIAL_DIFFUSION, diffuseBW, diffusePalette } from "./diffusion.js";
-import { orderedBW, orderedPalette } from "./ordered.js";
+import { SPECIAL_DIFFUSION, diffuseBW, diffuseOriginal, diffusePalette } from "./diffusion.js";
+import { orderedBW, orderedOriginal, orderedPalette } from "./ordered.js";
 import { isDiffusionTableMethod, isOrderedMethod, isSpecialDiffusionMethod } from "./methods.js";
 import { grayscaleFromRGB } from "./kernels.js";
 import {
@@ -378,6 +378,45 @@ export function ditherColor(
   return upscaleRGB(out, small.w, small.h, width, height, factor);
 }
 
+/**
+ * Dither the source colours instead of a palette. Ordered kernels nudge each
+ * channel by the same amount before posterising, so the move is a lightness
+ * shift and hue survives; diffusion kernels carry each channel's own error.
+ * `colorMode` is what selects this over `ditherColor`.
+ */
+export function ditherOriginal(
+  rgb: Uint8ClampedArray,
+  width: number,
+  height: number,
+  options: DitherOptions = {},
+): Uint8ClampedArray {
+  assertRGBBuffer(rgb, width, height);
+  assertDimensions(width, height);
+  const method = options.method ?? "Floyd-Steinberg";
+  assertMethod(method, "color");
+  const seed = options.seed ?? 0;
+  const onProgress = options.onProgress;
+  if (options.mask !== undefined) assertPixelMask(options.mask, width, height);
+  if (method === "None") {
+    const out = rgb.slice();
+    onProgress?.(height, height, out, width, height);
+    return out;
+  }
+  const factor = effectivePixelSize(options.pixelSize, options.preview);
+  const small = downscaleRGB(rgb, width, height, factor, options.mask);
+  const smallMask =
+    options.mask === undefined ? undefined : downscaleMask(options.mask, width, height, factor);
+  let out: Uint8ClampedArray;
+  if (isOrderedMethod(method)) {
+    out = orderedOriginal(small.data, small.w, small.h, method, seed, onProgress, smallMask);
+  } else if (isDiffusionTableMethod(method)) {
+    out = diffuseOriginal(small.data, small.w, small.h, method, onProgress, smallMask);
+  } else {
+    throw new TypeError(`unsupported original-colour method: ${method}`);
+  }
+  return upscaleRGB(out, small.w, small.h, width, height, factor);
+}
+
 export function ditherRGBA(image: RGBAImage, options: DitherRGBAOptions): Uint8ClampedArray {
   assertDitherRGBAOptions(options);
   assertRGBAImage(image);
@@ -419,9 +458,14 @@ export function ditherRGBA(image: RGBAImage, options: DitherRGBAOptions): Uint8C
     rgb[i * 3 + 2] = image.data[i * 4 + 2];
   }
   const coreOptions = { ...ditherOptions, palette, mask: activeMask, onProgress: progress };
-  const out = color
-    ? ditherColor(rgb, image.width, image.height, coreOptions)
-    : ditherGray(grayscaleFromRGB(rgb, image.width, image.height), coreOptions);
+  // An absent colorMode means "palette", which is what every preset written
+  // before the field existed already did.
+  const colorMode = ditherOptions.colorMode ?? "palette";
+  const out = !color
+    ? ditherGray(grayscaleFromRGB(rgb, image.width, image.height), coreOptions)
+    : colorMode === "original"
+      ? ditherOriginal(rgb, image.width, image.height, coreOptions)
+      : ditherColor(rgb, image.width, image.height, coreOptions);
   return packRGBA(
     out,
     image.width,

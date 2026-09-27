@@ -1,4 +1,5 @@
 import type { RenderRequest } from "../worker/render";
+import { resolveColorMode } from "../store";
 import type { DitherParams, ImageSource, RenderResult, StackedEffect } from "../store";
 import { requestOperations } from "../image/settings";
 import type { ImageOperations } from "../image/ops";
@@ -32,6 +33,7 @@ export function buildExportRenderRequest(
     height: source.height,
     pixels: source.pixels.slice(0),
     color: params.color,
+    colorMode: resolveColorMode(params),
     method: params.method,
     threshold: params.threshold,
     palette: params.palette,

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { cn } from "cn";
 import { METHOD_NAMES, PALETTES, type DitherMethod } from "../../../src/index.js";
-import { useApp } from "../store";
+import { resolveColorMode, useApp } from "../store";
 import { describeRenderStatus } from "../status";
 import PaletteEditor from "../palette/PaletteEditor";
 import { ImageDropzone } from "./ImageDropzone";
@@ -16,7 +16,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
+
+/** The three colour modes: greyscale, quantise to a palette, or keep the photo's own. */
+const COLOR_MODES = [
+  { id: "off", label: "Off" },
+  { id: "palette", label: "Palette" },
+  { id: "original", label: "Original" },
+] as const;
 
 /** Micro-label above a control; "SOURCE" is the one amber label in the rail. */
 function Field({
@@ -123,6 +129,8 @@ export default function ControlPanel({
     previewScaled,
   });
   const methodIndex = METHOD_NAMES.indexOf(params.method) + 1;
+  // A stored preset may predate the mode, and `color: false` wins over either.
+  const colorMode = !params.color ? "off" : resolveColorMode(params);
 
   return (
     <aside
@@ -161,18 +169,40 @@ export default function ControlPanel({
         </Select>
       </Field>
       <Field label="Color">
-        <div className="flex items-center gap-2">
-          <Switch
-            id="ctl-color"
-            checked={params.color}
-            onCheckedChange={(v) => setParams({ color: v })}
-          />
-          <Label htmlFor="ctl-color" className="text-caption text-foreground">
-            {params.color ? "On" : "Off"}
-          </Label>
+        <div
+          role="radiogroup"
+          aria-label="Color mode"
+          className="flex gap-1 rounded-lg border border-border bg-raised p-0.5"
+        >
+          {COLOR_MODES.map((m) => {
+            const active = colorMode === m.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() =>
+                  setParams({
+                    color: m.id !== "off",
+                    ...(m.id === "off" ? {} : { colorMode: m.id }),
+                  })
+                }
+                className={cn(
+                  "h-6.5 flex-1 cursor-pointer rounded-md text-caption whitespace-nowrap transition-colors",
+                  "focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none",
+                  active
+                    ? "bg-primary font-bold text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                {m.label}
+              </button>
+            );
+          })}
         </div>
       </Field>
-      {params.color && (
+      {params.color && colorMode === "palette" && (
         <Field label="Palette">
           <Select
             value={typeof params.palette === "string" ? params.palette : "custom"}

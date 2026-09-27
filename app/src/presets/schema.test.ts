@@ -105,6 +105,44 @@ describe("preset schema", () => {
   });
 });
 
+describe("colorMode", () => {
+  const base = {
+    version: PRESET_VERSION,
+    name: "Mode",
+    params: {
+      method: "Bayer 4x4",
+      threshold: 128,
+      palette: "Gruvbox",
+      color: true,
+      pixelSize: 4,
+    },
+    effects: [],
+  } as Preset;
+
+  it("round-trips an explicit original mode", () => {
+    const back = parsePresetJson(
+      serializePreset({ ...base, params: { ...base.params, colorMode: "original" } }),
+    );
+    expect(back.warnings).toEqual([]);
+    expect(back.preset!.params.colorMode).toBe("original");
+  });
+
+  it("leaves colorMode absent when the preset never chose one", () => {
+    const back = parsePresetJson(serializePreset(base));
+    expect(back.warnings).toEqual([]);
+    expect(back.preset!.params.colorMode).toBeUndefined();
+    // Absent must not be written out as an explicit "palette".
+    expect(serializePreset(base)).not.toContain("colorMode");
+  });
+
+  it("warns and falls back to palette on an unknown mode", () => {
+    const text = JSON.stringify({ ...base, params: { ...base.params, colorMode: "rainbow" } });
+    const back = parsePresetJson(text);
+    expect(back.preset!.params.colorMode).toBeUndefined();
+    expect(back.warnings.join(" ")).toContain("colorMode");
+  });
+});
+
 describe("effect type validation", () => {
   // Params are complete so every warning below comes from the effects array.
   const withEffects = (effects: unknown[]): ReturnType<typeof parsePresetJson> =>

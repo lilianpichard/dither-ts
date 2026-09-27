@@ -38,6 +38,14 @@ export const METHOD_NAMES: readonly DitherMethod[] = Object.freeze(
 /** Palette reference: registered name or explicit color list. */
 export type PaletteRef = string | RGB[];
 
+/**
+ * How colour is treated. `palette` snaps every pixel to a palette member;
+ * `original` dithers the source colours themselves, so the photo keeps its own
+ * palette. Optional and additive: a preset without it means `palette`, which is
+ * what every preset written before this field existed already did.
+ */
+export type ColorMode = "palette" | "original";
+
 export type PixelMask = Uint8Array | Uint8ClampedArray;
 
 /**
@@ -58,6 +66,8 @@ export interface DitherOptions {
   method?: DitherMethod;
   threshold?: number;
   palette?: PaletteRef;
+  /** Dither the source colours instead of snapping to `palette`. */
+  colorMode?: ColorMode;
   /** Downscale-dither-upscale factor (>=1). Enlarges the visible dots. */
   pixelSize?: number;
   /** Preview mode: doubles the effective pixel size. */

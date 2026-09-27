@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { cancelAll, renderImage } from "../worker/client";
 import { getPool } from "../worker/pool";
 import { stripKeys } from "../presets/store";
-import { useApp } from "../store";
+import { resolveColorMode, useApp } from "../store";
 import { announceProgress } from "../progress";
 import { formatEta } from "../batch/queue";
 import {
@@ -192,6 +192,7 @@ export default function Timeline() {
         height: size.height,
         pixels: copy,
         color: params.color,
+        colorMode: resolveColorMode(params),
         method: params.method,
         threshold: params.threshold,
         palette: params.palette,
@@ -451,6 +452,7 @@ export default function Timeline() {
               height: plan.height,
               pixels: copy,
               color: snapshot.color,
+              colorMode: resolveColorMode(snapshot),
               method: snapshot.method,
               threshold: snapshot.threshold,
               palette: snapshot.palette,

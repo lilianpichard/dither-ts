@@ -35,6 +35,25 @@ const result: RenderResult = {
 };
 
 describe("export render requests", () => {
+  it("carries the original-colour mode through to the export", () => {
+    // The export used to drop this field, so an export always came out in the
+    // palette even when the preview was in "original".
+    expect(
+      buildExportRenderRequest(source, { ...params, color: true, colorMode: "original" }, effects)
+        .colorMode,
+    ).toBe("original");
+    expect(
+      buildExportRenderRequest(source, { ...params, color: true, colorMode: "palette" }, effects)
+        .colorMode,
+    ).toBe("palette");
+  });
+
+  it("resolves a preset written before the mode existed to palette", () => {
+    expect(buildExportRenderRequest(source, { ...params, color: true }, effects).colorMode).toBe(
+      "palette",
+    );
+  });
+
   it("keeps the original source dimensions and pixels for export", () => {
     const request = buildExportRenderRequest(source, params, effects);
 

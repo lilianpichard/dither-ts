@@ -259,6 +259,11 @@ export function assertDitherOptions(options: unknown): asserts options is Dither
     if (typeof value.method !== "string") invalid("method must be a string");
     if (!getMethod(value.method)) invalid(`unknown method: ${value.method}`);
   }
+  if (value.colorMode !== undefined) {
+    if (value.colorMode !== "palette" && value.colorMode !== "original") {
+      invalid(`unknown colorMode: ${String(value.colorMode)}`);
+    }
+  }
   if (
     value.palette !== undefined &&
     typeof value.palette !== "string" &&

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { renderImage } from "../worker/client";
-import { useApp } from "../store";
+import { resolveColorMode, useApp } from "../store";
 import { requestOperations } from "../image/settings";
 import { makeSample } from "./sample";
 import { applyPreset, usePresets } from "./store";
@@ -60,6 +60,7 @@ async function renderThumb(preset: Preset): Promise<string> {
       height: sample.height,
       pixels: copy,
       color: preset.params.color,
+      colorMode: resolveColorMode(preset.params),
       method: preset.params.method,
       threshold: preset.params.threshold,
       palette:

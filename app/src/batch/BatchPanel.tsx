@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cancelAll, renderImage } from "../worker/client";
 import { stripKeys } from "../presets/store";
-import { useApp } from "../store";
+import { resolveColorMode, useApp } from "../store";
 import { requestOperations } from "../image/settings";
 import { announceProgress } from "../progress";
 import { outputName, uniqueOutputName } from "./naming";
@@ -98,6 +98,7 @@ export default function BatchPanel() {
               height: bitmap.height,
               pixels: copy,
               color: params.color,
+              colorMode: resolveColorMode(params),
               method: params.method,
               threshold: params.threshold,
               palette: params.palette,

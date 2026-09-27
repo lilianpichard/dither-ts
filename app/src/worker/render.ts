@@ -1,5 +1,11 @@
 import { applyEffects, ditherRGBA } from "../../../src/index.js";
-import type { DitherMethod, EffectInstance, RGB, RGBAImage } from "../../../src/index.js";
+import type {
+  ColorMode,
+  DitherMethod,
+  EffectInstance,
+  RGB,
+  RGBAImage,
+} from "../../../src/index.js";
 import { applyOperations, type ImageOperations } from "../image/ops";
 
 export interface RenderRequest {
@@ -9,6 +15,13 @@ export interface RenderRequest {
   /** RGBA pixels; transferred to the worker. */
   pixels: ArrayBuffer;
   color: boolean;
+  /**
+   * Required on purpose. Unlike the preset format, nothing is ever read back
+   * into this type, so there is no legacy caller to accommodate — and making it
+   * optional is exactly how the export, batch and video paths each forgot to
+   * pass it and silently fell back to the palette.
+   */
+  colorMode: ColorMode;
   method: DitherMethod;
   threshold: number;
   palette: string | RGB[];
@@ -61,6 +74,7 @@ export function runRender(request: RenderRequest, post: PostMessage): void {
     height,
     pixels,
     color,
+    colorMode,
     method,
     palette,
     threshold,
@@ -95,6 +109,7 @@ export function runRender(request: RenderRequest, post: PostMessage): void {
   };
   const run = ditherRGBA(prepared, {
     color,
+    colorMode,
     method,
     palette,
     threshold,

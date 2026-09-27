@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cancelAll, renderImage } from "./worker/client";
 import { stripKeys } from "./presets/store";
-import { useApp } from "./store";
+import { resolveColorMode, useApp } from "./store";
 import { describeRenderStatus } from "./status";
 import { requestOperations, scaleOperations } from "./image/settings";
 import { MAX_HEAVY_PREVIEW_DIM, fitSize, isHeavyMethod } from "./video/jobs";
@@ -156,6 +156,7 @@ export default function App() {
             height,
             pixels,
             color: params.color,
+            colorMode: resolveColorMode(params),
             method: params.method,
             threshold: params.threshold,
             palette: params.palette,

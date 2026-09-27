@@ -4,7 +4,7 @@
 // importers have one path. See docs/presets.md.
 
 import { EFFECT_DEFS, METHOD_NAMES } from "../../../src/index.js";
-import type { DitherMethod, EffectDef } from "../../../src/index.js";
+import type { ColorMode, DitherMethod, EffectDef } from "../../../src/index.js";
 import { PALETTES, type RGB } from "../../../src/index.js";
 import { isIdentity, sanitizeOperations } from "../image/settings";
 import type { ImageOperations } from "../image/ops";
@@ -24,6 +24,12 @@ export interface PresetParams {
   threshold: number;
   palette: PresetPalette;
   color: boolean;
+  /**
+   * Optional so every preset written before the field existed still parses and
+   * still means "palette" — which is exactly what it did. Absent is not an
+   * error and needs no migration.
+   */
+  colorMode?: ColorMode;
   pixelSize: number;
 }
 
@@ -170,6 +176,12 @@ function parseParams(v: unknown, warnings: string[]): PresetParams {
   }
   let color = DEFAULTS.color;
   if (typeof o.color === "boolean") color = o.color;
+  let colorMode: ColorMode | undefined;
+  if (o.colorMode === "palette" || o.colorMode === "original") {
+    colorMode = o.colorMode;
+  } else if (o.colorMode !== undefined) {
+    warnings.push(`unknown colorMode "${String(o.colorMode)}", using palette`);
+  }
   let pixelSize = DEFAULTS.pixelSize;
   if (
     Number.isInteger(o.pixelSize) &&
@@ -180,7 +192,16 @@ function parseParams(v: unknown, warnings: string[]): PresetParams {
   } else {
     warnings.push("invalid pixelSize, using 1");
   }
-  return { method, threshold, palette: parsePalette(o.palette, warnings), color, pixelSize };
+  return {
+    method,
+    threshold,
+    palette: parsePalette(o.palette, warnings),
+    color,
+    // Omitted rather than written as "palette", so a preset that never chose a
+    // mode round-trips byte-for-byte as it did before.
+    ...(colorMode ? { colorMode } : {}),
+    pixelSize,
+  };
 }
 
 /** Read the optional operation set; junk falls back to identity with a warning. */

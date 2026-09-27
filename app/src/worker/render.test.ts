@@ -18,6 +18,7 @@ function request(overrides: Partial<RenderRequest> = {}): RenderRequest {
     height,
     pixels: data.buffer as ArrayBuffer,
     color: false,
+    colorMode: "palette",
     method: "None",
     threshold: 128,
     palette: "B&W",

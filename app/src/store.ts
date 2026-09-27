@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { DitherMethod, EffectInstance, RGB } from "../../src/index.js";
+import type { ColorMode, DitherMethod, EffectInstance, RGB } from "../../src/index.js";
 import { defaultEffectParams } from "../../src/index.js";
 import {
   EMPTY_HISTORY,
@@ -17,7 +17,18 @@ export interface DitherParams {
   threshold: number;
   palette: string | RGB[];
   color: boolean;
+  /** Absent means "palette", which is what every preset written earlier meant. */
+  colorMode?: ColorMode;
   pixelSize: number;
+}
+
+/**
+ * The colour mode a render request should carry. Every render path resolves it
+ * through here, so a preset written before the field existed (and therefore
+ * has no `colorMode`) means "palette" in exactly one place.
+ */
+export function resolveColorMode(params: Pick<DitherParams, "colorMode">): ColorMode {
+  return params.colorMode === "original" ? "original" : "palette";
 }
 
 export interface ImageSource {

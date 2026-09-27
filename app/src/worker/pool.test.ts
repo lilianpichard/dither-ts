@@ -25,6 +25,7 @@ function req(n: number): Omit<RenderRequest, "id"> {
     height: 2,
     pixels: new ArrayBuffer(16),
     color: false,
+    colorMode: "palette",
     method: "None",
     threshold: 128,
     palette: "B&W",
