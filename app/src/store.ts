@@ -11,6 +11,7 @@ import {
 } from "./history";
 import { IDENTITY_OPERATIONS, fitOperations } from "./image/settings";
 import type { ImageOperations } from "./image/ops";
+import type { Frame } from "./preview/frame";
 
 export interface DitherParams {
   method: DitherMethod;
@@ -47,6 +48,19 @@ export interface RenderResult {
   partial?: boolean;
 }
 
+/**
+ * What the video timeline publishes for the shared preview surface: the dithered
+ * frame, the decoded frame to compare against, and the clip-space geometry the
+ * view is expressed in. `clipKey` changes only when a different clip is loaded,
+ * so the surface can tell "new subject" from "next frame".
+ */
+export interface VideoPreview {
+  display: Frame;
+  compare: Frame;
+  geometry: Frame;
+  clipKey: string;
+}
+
 interface AppState {
   source: ImageSource | null;
   params: DitherParams;
@@ -55,6 +69,11 @@ interface AppState {
   operations: ImageOperations;
   result: RenderResult | null;
   preview: RenderResult | null;
+  /**
+   * The video timeline's current frame, published so the main canvas can preview
+   * it exactly like a still image. `null` whenever no video owns the canvas.
+   */
+  videoPreview: VideoPreview | null;
   rendering: boolean;
   previewScaled: boolean;
   /** Bounded undo/redo stacks over params plus operations. */
@@ -70,6 +89,7 @@ interface AppState {
   redo: () => void;
   setResult: (result: RenderResult | null) => void;
   setPreview: (preview: RenderResult | null) => void;
+  setVideoPreview: (videoPreview: VideoPreview | null) => void;
   setRendering: (rendering: boolean) => void;
   setPreviewScaled: (previewScaled: boolean) => void;
   setEffects: (effects: StackedEffect[]) => void;
@@ -118,6 +138,7 @@ export const useApp = create<AppState>()((set) => ({
   operations: IDENTITY_OPERATIONS,
   result: null,
   preview: null,
+  videoPreview: null,
   rendering: false,
   previewScaled: false,
   past: EMPTY_HISTORY.past,
@@ -194,6 +215,7 @@ export const useApp = create<AppState>()((set) => ({
     }),
   setResult: (result) => set({ result, preview: null, rendering: false }),
   setPreview: (preview) => set({ preview }),
+  setVideoPreview: (videoPreview) => set({ videoPreview }),
   setRendering: (rendering) => set({ rendering }),
   setPreviewScaled: (previewScaled) => set({ previewScaled }),
   setEffects: (effects) => set({ effects, result: null }),

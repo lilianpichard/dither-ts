@@ -15,6 +15,7 @@ import { cancelAll, renderImage } from "../worker/client";
 import { getPool } from "../worker/pool";
 import { stripKeys } from "../presets/store";
 import { resolveColorMode, useApp } from "../store";
+import type { Frame } from "../preview/frame";
 import { announceProgress } from "../progress";
 import { formatEta } from "../batch/queue";
 import {
@@ -67,10 +68,19 @@ interface CapturedInput {
 const PREVIEW_SCOPE = "timeline-preview";
 const EXPORT_RENDER_TIMEOUT_MS = 30_000;
 
+/**
+ * Identifies the loaded clip for the preview surface's `resetKey`, so a different
+ * clip refits while every frame of the same clip leaves the view alone.
+ */
+function clipKeyOf(clip: LoadedClip): string {
+  return `${clip.info.width}x${clip.info.height}@${clip.info.duration.toFixed(3)}`;
+}
+
 export default function Timeline() {
   const params = useApp((s) => s.params);
   const effects = useApp((s) => s.effects);
   const operations = useApp((s) => s.operations);
+  const setVideoPreview = useApp((s) => s.setVideoPreview);
   const [clip, setClip] = useState<LoadedClip | null>(null);
   const duration = clip?.info.duration ?? 0;
   const [fileName, setFileName] = useState("");
@@ -94,7 +104,6 @@ export default function Timeline() {
   const loadAbort = useRef<AbortController | null>(null);
   const clipRef = useRef<LoadedClip | null>(null);
   const loadSeq = useRef(0);
-  const frameRef = useRef<HTMLCanvasElement>(null);
   const previewSeq = useRef(0);
   const loopRef = useRef(false);
   const playingRef = useRef(false);
@@ -185,7 +194,16 @@ export default function Timeline() {
       live,
     });
     if (controller.signal.aborted) return;
-    const copy = new Uint8ClampedArray(raw.data).buffer as ArrayBuffer;
+    // The render transfers its input buffer to the worker, which detaches it, so
+    // the frame kept for compare has to be a separate copy that is never handed
+    // over. Reusing `copy` here left the published compare frame detached.
+    const comparePixels = new Uint8ClampedArray(raw.data);
+    const geometry: Frame = {
+      width: size.width,
+      height: size.height,
+      pixels: comparePixels.buffer as ArrayBuffer,
+    };
+    const copy = new Uint8ClampedArray(comparePixels).buffer as ArrayBuffer;
     const res = await renderImage(
       {
         width: size.width,
@@ -204,15 +222,17 @@ export default function Timeline() {
       [copy],
       { signal: controller.signal, scope: PREVIEW_SCOPE },
     );
-    const c = frameRef.current;
-    if (!c || mySeq !== previewSeq.current || controller.signal.aborted) return;
-    c.width = res.width;
-    c.height = res.height;
-    c.getContext("2d")!.putImageData(
-      new ImageData(new Uint8ClampedArray(res.pixels), res.width, res.height),
-      0,
-      0,
-    );
+    if (mySeq !== previewSeq.current || controller.signal.aborted) return;
+    // The shared preview surface owns the canvas, so publish the frame instead of
+    // painting here. `geometry` is the preview size, which is constant for a clip:
+    // that keeps the surface's zoom still while frames stream in, and makes 100%
+    // mean one preview pixel per screen pixel.
+    setVideoPreview({
+      display: { width: res.width, height: res.height, pixels: res.pixels },
+      compare: geometry,
+      geometry,
+      clipKey: clipKeyOf(clip),
+    });
     // The frame is current again, so any earlier preview error is stale.
     if (!working) setError("");
   }
@@ -268,6 +288,12 @@ export default function Timeline() {
     if (!clip) return;
     void previewRef.current(0);
   }, [clip]);
+
+  // The tab unmounts this panel on switch, so hand the canvas back to the still
+  // image rather than leave a frame that no longer has a timeline under it.
+  useEffect(() => {
+    return () => setVideoPreview(null);
+  }, [setVideoPreview]);
 
   /** Forget the coalescing state so the next run starts on a fresh frame. */
   function resetLivePreview(): void {
@@ -743,12 +769,6 @@ export default function Timeline() {
             </Button>
             <Badge variant="secondary">{transportLine}</Badge>
           </div>
-          <canvas
-            ref={frameRef}
-            role="img"
-            aria-label="Dithered video frame preview"
-            className="max-h-64 w-full rounded-lg border border-border bg-canvas object-contain"
-          />
           <p className="text-label text-muted-foreground">{describeAudioStatus(audio)}</p>
           <div className="flex flex-wrap items-center gap-3">
             <Button

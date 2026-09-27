@@ -1,16 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, Maximize, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "cn";
-import type { ImageSource, RenderResult } from "../store";
+import { frameToCanvas, type Frame } from "./frame";
 import { fitView, type View } from "./canvasFit";
-
-function imageToCanvas(pixels: ArrayBuffer, w: number, h: number): HTMLCanvasElement {
-  const c = document.createElement("canvas");
-  c.width = w;
-  c.height = h;
-  c.getContext("2d")!.putImageData(new ImageData(new Uint8ClampedArray(pixels), w, h), 0, 0);
-  return c;
-}
 
 function isTypingTarget(t: EventTarget | null): boolean {
   return (
@@ -49,19 +41,44 @@ function ZoomButton({
   );
 }
 
+export interface PreviewSurfaceProps {
+  /** The bitmap to paint. */
+  display: Frame | null;
+  /** The bitmap shown while compare is held; `null` hides the compare control. */
+  compare: Frame | null;
+  /**
+   * The coordinate space for zoom and fit. Only its dimensions matter, so a
+   * caller may pass a freshly built object each frame — which is what lets a
+   * downscaled preview and a full-resolution result share one view.
+   */
+  geometry: Frame | null;
+  /**
+   * Changing this refits, for the cases the dimensions cannot express: loading a
+   * different image or a different clip.
+   */
+  resetKey?: unknown;
+  label: string;
+}
+
 /**
- * Zoomable canvas viewport with hold-to-compare. Single canvas shows the
- * result; holding compare (button or C) swaps in the source. Wheel zooms
- * at the cursor, drag pans, double-click fits. Pixel smoothing stays off
- * so dither dots remain exact at any zoom.
+ * The app's single preview surface, shared by the still image and the video
+ * timeline. Wheel zooms at the cursor, drag pans, double-click fits, and holding
+ * compare (the button or C) swaps in `compare`. Pixel smoothing stays off so
+ * dither dots remain exact at any zoom.
+ *
+ * Three invariants keep the view still while the work happens underneath it:
+ * the view is expressed in `geometry` space, so a render landing changes no
+ * geometry; the refit keys on geometry dimensions rather than object identity, so
+ * a new frame object each time does not count as a new image; and the last frame
+ * stays painted, so a re-render or a scrub never blanks the canvas.
  */
-export default function CanvasViewport({
-  source,
-  result,
-}: {
-  source: ImageSource | null;
-  result: RenderResult | null;
-}) {
+export default function PreviewSurface({
+  display,
+  compare,
+  geometry,
+  resetKey,
+  label,
+}: PreviewSurfaceProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -71,46 +88,42 @@ export default function CanvasViewport({
   viewRef.current = view;
   const dragRef = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
 
-  const sourceCanvas = useMemo(
-    () => (source ? imageToCanvas(source.pixels, source.width, source.height) : null),
-    [source],
-  );
-  // A parameter change clears `result` while the next render is in flight. Keep
-  // painting the previous frame rather than flashing the source, so the viewport
-  // stays on the same pixels throughout and the zoom below is never disturbed.
-  const lastResultRef = useRef<RenderResult | null>(result);
-  if (result) lastResultRef.current = result;
-  const shownResult = result ?? lastResultRef.current;
+  const geoW = geometry?.width ?? 0;
+  const geoH = geometry?.height ?? 0;
 
-  const shownCanvas = useMemo(
-    () =>
-      shownResult ? imageToCanvas(shownResult.pixels, shownResult.width, shownResult.height) : null,
-    [shownResult],
-  );
+  // A parameter change clears the result while the next render is in flight, and
+  // a scrub leaves the previous frame up until the next one lands. Keep painting
+  // it, but only while the geometry still matches: a change of subject must drop
+  // the stale frame rather than leave it on screen.
+  const heldRef = useRef<{ w: number; h: number; frame: Frame } | null>(null);
+  const live =
+    display ??
+    (heldRef.current && heldRef.current.w === geoW && heldRef.current.h === geoH
+      ? heldRef.current.frame
+      : null);
+  if (display) heldRef.current = { w: geoW, h: geoH, frame: display };
 
-  const active = comparing ? (sourceCanvas ?? shownCanvas) : (shownCanvas ?? sourceCanvas);
+  const displayCanvas = useMemo(() => (live ? frameToCanvas(live) : null), [live]);
+  const compareCanvas = useMemo(() => (compare ? frameToCanvas(compare) : null), [compare]);
 
-  // Everything is expressed in source-image space. A heavy method renders a
-  // downscaled preview first and the full-resolution result second, so the two
-  // have different pixel dimensions; drawing both into the source rect means a
-  // render landing changes no geometry, and the zoom survives it.
-  const geometry = sourceCanvas ?? shownCanvas;
+  const canCompare = compareCanvas !== null;
+  const active = comparing && canCompare ? compareCanvas : (displayCanvas ?? compareCanvas);
 
   const fitTo = useCallback(() => {
-    if (!geometry || size.w === 0) return;
-    setView(fitView(size.w, size.h, geometry.width, geometry.height));
-  }, [geometry, size]);
+    if (!geoW || !geoH || size.w === 0) return;
+    setView(fitView(size.w, size.h, geoW, geoH));
+  }, [geoW, geoH, size]);
 
   // Explicit "show the whole thing" actions: the fit button, double-click and 0.
   const fit = useCallback(fitTo, [fitTo]);
 
-  // Refit only for a new image or a resized box. Neither `result` nor `comparing`
-  // takes part: a render replaces `result` on every parameter tweak, and compare
-  // swaps which canvas is painted. Either one resetting the view would make it
-  // impossible to judge a dithering change at a fixed magnification.
+  // Neither `display` nor `compare` takes part: a render replaces `display` on
+  // every parameter tweak, and compare swaps which bitmap is painted. Either one
+  // resetting the view would make it impossible to judge a change at a fixed
+  // magnification.
   useEffect(() => {
     fitTo();
-  }, [fitTo]);
+  }, [fitTo, resetKey]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -123,25 +136,19 @@ export default function CanvasViewport({
     return () => ro.disconnect();
   }, []);
 
-  // Paint on every relevant change. The destination rect comes from `geometry`
-  // (the source), not from `active`, so a downscaled preview fills exactly the
-  // same area the full-resolution result will.
+  // Paint on every relevant change. The destination rect comes from the geometry
+  // dimensions, not from `active`, so a downscaled frame fills exactly the same
+  // area its full-resolution counterpart will.
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !active || !geometry) return;
+    if (!canvas || !active || !geoW || !geoH) return;
     canvas.width = Math.max(1, Math.floor(size.w));
     canvas.height = Math.max(1, Math.floor(size.h));
     const ctx = canvas.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(
-      active,
-      view.ox,
-      view.oy,
-      geometry.width * view.scale,
-      geometry.height * view.scale,
-    );
-  }, [active, geometry, view, size]);
+    ctx.drawImage(active, view.ox, view.oy, geoW * view.scale, geoH * view.scale);
+  }, [active, geoW, geoH, view, size]);
 
   const zoomAt = useCallback(
     (factor: number, cx?: number, cy?: number) => {
@@ -176,7 +183,7 @@ export default function CanvasViewport({
       if (e.key === "+" || e.key === "=") zoomAt(1.2);
       else if (e.key === "-") zoomAt(1 / 1.2);
       else if (e.key === "0") fit();
-      else if ((e.key === "c" || e.key === "C") && !e.repeat) setComparing(true);
+      else if ((e.key === "c" || e.key === "C") && !e.repeat && canCompare) setComparing(true);
     };
     const up = (e: KeyboardEvent) => {
       if (e.key === "c" || e.key === "C") setComparing(false);
@@ -187,7 +194,7 @@ export default function CanvasViewport({
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
     };
-  }, [zoomAt, fit]);
+  }, [zoomAt, fit, canCompare]);
 
   function onPointerDown(e: React.PointerEvent) {
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -211,7 +218,7 @@ export default function CanvasViewport({
       <canvas
         ref={canvasRef}
         role="img"
-        aria-label="Dithered image preview"
+        aria-label={label}
         className="block h-full w-full cursor-grab touch-none active:cursor-grabbing"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -236,15 +243,16 @@ export default function CanvasViewport({
         <button
           type="button"
           aria-label="Compare with original"
-          aria-pressed={comparing}
-          title="Hold to compare with original (C)"
-          onPointerDown={() => setComparing(true)}
+          aria-pressed={comparing && canCompare}
+          disabled={!canCompare}
+          title={canCompare ? "Hold to compare with original (C)" : "Nothing to compare against"}
+          onPointerDown={() => canCompare && setComparing(true)}
           onPointerUp={() => setComparing(false)}
           onPointerLeave={() => setComparing(false)}
           onPointerCancel={() => setComparing(false)}
           className={cn(
-            "flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none [&_svg]:size-3",
-            comparing
+            "flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-3",
+            comparing && canCompare
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:text-foreground",
           )}
