@@ -97,11 +97,11 @@ function fitToSource(source: ImageSource | null, operations: unknown): ImageOper
 export const useApp = create<AppState>()((set) => ({
   source: null,
   params: {
-    method: "Floyd-Steinberg",
+    method: "Bayer 4x4",
     threshold: 128,
-    palette: "GameBoy",
-    color: false,
-    pixelSize: 1,
+    palette: "Gruvbox",
+    color: true,
+    pixelSize: 4,
   },
   effects: [],
   operations: IDENTITY_OPERATIONS,

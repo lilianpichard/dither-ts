@@ -189,7 +189,50 @@
   scrollbar-color: var(--border) transparent;
 }
 
+/* AnalyzingImage: a mask wipes the glyph away while a bar sweeps across, then
+   both mirror. Stops and easing follow loading-ui's original (2.5s,
+   cubic-bezier(0.175, 0.885, 0.32, 1), holding from 60% to 100%). */
+@keyframes analyzing-wipe {
+  0% {
+    clip-path: inset(0% 0% 0% 0%);
+  }
+  60%,
+  100% {
+    clip-path: inset(0% 105% 0% 0%);
+  }
+}
+
+@keyframes analyzing-scan {
+  0% {
+    transform: translateX(1400%);
+  }
+  60%,
+  100% {
+    transform: translateX(-80%);
+  }
+}
+
+@utility analyzing-wipe-layer {
+  /* Defaults to the recessed stage so the wipe reads as native to the canvas. */
+  background-color: var(--loading-ui-analyzing-image-background, var(--canvas));
+  animation: analyzing-wipe 2.5s cubic-bezier(0.175, 0.885, 0.32, 1) infinite alternate;
+}
+
+@utility analyzing-scan-bar {
+  width: 7%;
+  animation: analyzing-scan 2.5s cubic-bezier(0.175, 0.885, 0.32, 1) infinite alternate;
+}
+
 @layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  html,
+  body {
+    overflow: hidden;
+  }
   * {
     @apply border-border outline-ring/50;
   }

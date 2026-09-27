@@ -54,7 +54,7 @@ function SelectTrigger({
 function SelectContent({
   className,
   children,
-  position = "item-aligned",
+  position = "popper",
   align = "center",
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
@@ -76,9 +76,12 @@ function SelectContent({
         <SelectScrollUpButton />
         <SelectPrimitive.Viewport
           data-position={position}
+          // p-1 keeps the scroll-up/down buttons in the padding gutter instead
+          // of on top of the first and last option.
           className={cn(
-            "data-[position=popper]:h-(--radix-select-trigger-height) data-[position=popper]:w-full data-[position=popper]:min-w-(--radix-select-trigger-width)",
-            position === "popper" && "",
+            "p-1",
+            position === "popper" &&
+              "w-full min-w-(--radix-select-trigger-width) data-[position=popper]:min-w-(--radix-select-trigger-width)",
           )}
         >
           {children}

@@ -10,6 +10,7 @@ import CanvasViewport from "./components/CanvasViewport";
 import ControlPanel from "./components/ControlPanel";
 import ToolsPanel, { TOOL_IDS, type ToolId } from "./components/ToolsPanel";
 import { TopBar } from "./components/TopBar";
+import { AnalyzingImage } from "./components/AnalyzingImage";
 import { PanelResizer } from "./components/PanelResizer";
 import { usePanelSize } from "./lib/panelSize";
 import { Button } from "@/components/ui/button";
@@ -238,7 +239,13 @@ export default function App() {
   const shown = preview ?? result;
 
   return (
-    <main ref={shellRef} className="flex h-screen w-screen flex-col overflow-hidden bg-background">
+    // relative is load-bearing, not decoration: Tailwind's `sr-only` is
+    // `position: absolute`, and every screen-reader-only live region (one per
+    // preset card, plus the status region) resolves its containing block from
+    // here. Without a positioned ancestor they resolve against the initial
+    // containing block, escape this element's `overflow-hidden`, and stretch the
+    // document, which is what let the page scroll once the gallery had cards.
+    <main ref={shellRef} className="relative flex h-full flex-col overflow-hidden bg-background">
       <TopBar />
       {/* Toasts own failures; this region only speaks render status. */}
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
@@ -269,6 +276,14 @@ export default function App() {
                   · {params.pixelSize}px
                 </p>
               </>
+            ) : source ? (
+              // A param change clears the result, so there is a frame with a
+              // source but nothing to show. That is a render in flight, not an
+              // empty app, so it gets a loader rather than the drop prompt.
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
+                <AnalyzingImage className="size-16" />
+                <p className="text-label uppercase">Processing</p>
+              </div>
             ) : (
               <Empty className="h-full">
                 <EmptyHeader>
