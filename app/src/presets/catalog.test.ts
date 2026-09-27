@@ -37,13 +37,15 @@ describe("bundled catalog", () => {
     for (const { preset, warnings } of loaded) {
       expect(preset).not.toBeNull();
       expect(preset.name).not.toBe("");
-      expect(warnings[0]).toBe("legacy Dither Guy preset, migrated");
+      // Every bundled preset is legacy, so a note here is expected. What must
+      // never appear is a blanket "migrated" line repeated once per preset.
+      expect(warnings).not.toContain("legacy Dither Guy preset, migrated");
     }
   });
 
   it("always says what the migration could not carry", () => {
     for (const { warnings } of loadCatalog()) {
-      expect(warnings.length).toBeGreaterThan(1);
+      expect(warnings.length).toBeGreaterThan(0);
     }
   });
 

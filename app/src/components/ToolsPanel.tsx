@@ -31,9 +31,12 @@ export const TOOL_COUNT = TOOLS.length;
 export default function ToolsPanel({
   tool,
   onTool,
+  height,
 }: {
   tool: ToolId;
   onTool: (t: ToolId) => void;
+  /** Owned by the shell so the console can be dragged and collapsed. */
+  height: number;
 }) {
   // Each panel publishes its own count into the console header.
   const [meta, setMeta] = useState("");
@@ -42,7 +45,13 @@ export default function ToolsPanel({
     <Tabs
       value={tool}
       onValueChange={(v) => onTool(v as ToolId)}
-      className="flex max-h-1/2 shrink-0 flex-col lg:max-h-none lg:flex-2"
+      style={{ height }}
+      // flex-initial (flex: 0 1 auto) is load-bearing twice over: the Tabs
+      // primitive ships flex-1, and a flex item's flex-basis beats `height`, so
+      // without it the shell's height is ignored. Shrink is left on so a short
+      // or narrow window compresses the console instead of pushing the dock off
+      // screen; min-h-14 keeps the dock itself whole.
+      className="flex min-h-14 flex-initial flex-col"
     >
       <ConsoleShell title={active.title} meta={meta || undefined}>
         <ConsoleMetaContext.Provider value={{ tool, publish: (_owner, value) => setMeta(value) }}>

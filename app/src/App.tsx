@@ -10,6 +10,8 @@ import CanvasViewport from "./components/CanvasViewport";
 import ControlPanel from "./components/ControlPanel";
 import ToolsPanel, { TOOL_IDS, type ToolId } from "./components/ToolsPanel";
 import { TopBar } from "./components/TopBar";
+import { PanelResizer } from "./components/PanelResizer";
+import { usePanelSize } from "./lib/panelSize";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -22,6 +24,10 @@ import { Toaster } from "@/components/ui/sonner";
 
 const APP_RENDER_TIMEOUT = 30_000;
 const APP_RENDER_SCOPE = "app-preview";
+const RAIL_MIN = 176;
+const CONSOLE_MIN = 120;
+const RAIL_DEFAULT = 256;
+const CONSOLE_DEFAULT = 300;
 let jobSeq = 0;
 
 async function fileToSource(file: File) {
@@ -63,6 +69,23 @@ export default function App() {
   const fileSequence = useRef(0);
   const renderAbort = useRef<AbortController | null>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
+  // Panel extents are user-owned: draggable, collapsible, remembered.
+  const rail = usePanelSize("dither-ts.panel.rail", RAIL_DEFAULT);
+  const consolePanel = usePanelSize("dither-ts.panel.console", CONSOLE_DEFAULT);
+  const shellRef = useRef<HTMLElement>(null);
+  const [bounds, setBounds] = useState({ w: 1280, h: 800 });
+
+  // The resizers clamp against the real shell box, so a panel can never be
+  // dragged wider than the window or taller than the space the canvas needs.
+  useEffect(() => {
+    const el = shellRef.current;
+    if (!el) return;
+    const read = () => setBounds({ w: el.clientWidth, h: el.clientHeight });
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const status = useMemo(
     () =>
       describeRenderStatus({
@@ -215,16 +238,29 @@ export default function App() {
   const shown = preview ?? result;
 
   return (
-    <main className="flex min-h-svh flex-col overflow-x-clip bg-background lg:h-svh lg:overflow-hidden">
+    <main ref={shellRef} className="flex h-screen w-screen flex-col overflow-hidden bg-background">
       <TopBar />
       {/* Toasts own failures; this region only speaks render status. */}
       <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
         {status}
       </div>
-      <div className="flex flex-1 flex-col lg:min-h-0 lg:flex-row">
-        <ControlPanel onFile={(file) => void onFile(file)} />
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <ControlPanel
+          onFile={(file) => void onFile(file)}
+          width={rail.size}
+          collapsed={rail.collapsed}
+        />
+        <PanelResizer
+          orientation="vertical"
+          label="control rail"
+          size={rail.size}
+          onResize={rail.resize}
+          onToggle={rail.toggle}
+          min={RAIL_MIN}
+          max={Math.max(RAIL_MIN, bounds.w - 420)}
+        />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3">
-          <section className="relative flex min-h-64 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-canvas lg:min-h-0 lg:flex-3">
+          <section className="relative flex min-h-32 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-canvas">
             {source && shown ? (
               <>
                 <CanvasViewport source={source} result={shown} />
@@ -265,7 +301,16 @@ export default function App() {
               </Empty>
             )}
           </section>
-          <ToolsPanel tool={tool} onTool={setTool} />
+          <PanelResizer
+            orientation="horizontal"
+            label="console"
+            size={consolePanel.size}
+            onResize={consolePanel.resize}
+            onToggle={consolePanel.toggle}
+            min={CONSOLE_MIN}
+            max={Math.max(CONSOLE_MIN, bounds.h - 260)}
+          />
+          <ToolsPanel tool={tool} onTool={setTool} height={consolePanel.size} />
         </div>
       </div>
       <Toaster />

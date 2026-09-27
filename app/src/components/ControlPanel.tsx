@@ -96,10 +96,20 @@ function SourceChip({ onFile }: { onFile: (f: File | undefined) => void }) {
 }
 
 /**
- * Left rail, 172px: the source chip, every dither control, the render status
- * pill, and the pre-dither adjustments. Board C01 fixes the order.
+ * Left rail: the source chip, every dither control, the render status pill, and
+ * the pre-dither adjustments. Board C01 fixes the order. Width is owned by the
+ * shell so the rail can be dragged and collapsed; below lg it is full width and
+ * scrolls inside its own bounded band instead of growing the page.
  */
-export default function ControlPanel({ onFile }: { onFile: (f: File | undefined) => void }) {
+export default function ControlPanel({
+  onFile,
+  width,
+  collapsed,
+}: {
+  onFile: (f: File | undefined) => void;
+  width: number;
+  collapsed: boolean;
+}) {
   const params = useApp((s) => s.params);
   const source = useApp((s) => s.source);
   const result = useApp((s) => s.result);
@@ -115,7 +125,21 @@ export default function ControlPanel({ onFile }: { onFile: (f: File | undefined)
   const methodIndex = METHOD_NAMES.indexOf(params.method) + 1;
 
   return (
-    <aside className="flex w-full flex-col gap-3 overflow-x-hidden border-r border-border bg-background scrollbar-slim p-3 lg:h-full lg:w-56 lg:min-h-0 lg:shrink-0 lg:overflow-y-auto xl:w-64">
+    <aside
+      // The width is published as a custom property rather than a bare inline
+      // `width`, so it can be scoped to lg: below that the rail is a stacked
+      // full-width band, and a raw inline width would leave the rest of the band
+      // empty. A flex item's width is set by the class, never by the attribute.
+      style={{ "--rail-w": `${width}px` } as React.CSSProperties}
+      className={cn(
+        "flex w-full shrink-0 flex-col gap-3 overflow-x-hidden overflow-y-auto border-r border-border bg-background scrollbar-slim p-3 lg:w-(--rail-w)",
+        // Below lg the rail is a full-width band with a capped height, so the
+        // page never scrolls. 2/5 (not 1/2) leaves the console and dock room on
+        // short windows instead of pushing the dock below the fold.
+        "max-h-2/5 lg:max-h-none",
+        collapsed && "hidden",
+      )}
+    >
       <Field label="Source" accent>
         <SourceChip onFile={onFile} />
       </Field>

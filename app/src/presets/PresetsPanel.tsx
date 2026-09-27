@@ -38,6 +38,15 @@ export function describeAge(stamp: number | undefined, now: number = Date.now())
   return `${Math.floor(elapsed / DAY)}d ago`;
 }
 
+function summarize(warnings: string[]): string {
+  const counts = new Map<string, number>();
+  for (const note of warnings) {
+    const key = note.trim();
+    if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts].map(([note, n]) => (n > 1 ? `${note} (x${n})` : note)).join("; ");
+}
+
 function thumbKey(id: string, preset: Preset): string {
   return `${id}:${JSON.stringify(preset)}`;
 }
@@ -132,30 +141,30 @@ export default function PresetsPanel() {
     if (!file) return;
     const text = await file.text();
     // The file stem names the preset: legacy files carry no name of their own.
-    const { added, warnings } = importJson(text, file.name.replace(/\.json$/i, ""));
-    const ok = added > 0;
-    const msg = ok
-      ? warnings.length
-        ? `Imported with warnings: ${warnings.join("; ")}`
-        : "Preset imported."
-      : `Import failed: ${warnings.join("; ")}`;
-    setNotice({ ok, text: msg });
-    if (ok) toast.success("Preset imported");
-    else toast.error("Preset import failed");
+    const name = file.name.replace(/\.json$/i, "");
+    const { added, warnings } = importJson(text, name);
+    if (added === 0) {
+      // A failed import is the one case that deserves a persistent block: the
+      // reason is long and the user has to read it to fix the file.
+      setNotice({ ok: false, text: `Could not import ${name}: ${summarize(warnings)}` });
+      toast.error("Preset import failed");
+    } else if (warnings.length) {
+      // Deduplicated and attributed, so a note says which preset it came from.
+      toast.success(`Imported ${name}`, { description: summarize(warnings) });
+    } else {
+      toast.success(`Imported ${name}`);
+    }
     if (importRef.current) importRef.current.value = "";
   }
 
   function onInstallCatalog() {
-    const { added, warnings } = installCatalog();
+    const { added } = installCatalog();
     if (added === 0) {
       toast.info("Original presets are already in the gallery");
       return;
     }
-    // Every bundled preset is a legacy file, so warnings are expected here.
-    setNotice({
-      ok: true,
-      text: `Added ${added} original presets. Migration notes: ${warnings.join("; ")}`,
-    });
+    // Every bundled preset is a legacy file, so its migration notes are expected
+    // housekeeping, not something to report. One line is the whole story.
     toast.success(`Added ${added} original presets`);
   }
 
@@ -196,9 +205,9 @@ export default function PresetsPanel() {
             onChange={(e) => void onImportFile(e.target.files?.[0])}
           />
         </div>
-        {notice && (
-          <Alert variant={notice.ok ? "default" : "destructive"}>
-            <AlertTitle>{notice.ok ? "Import" : "Import failed"}</AlertTitle>
+        {notice && !notice.ok && (
+          <Alert variant="destructive">
+            <AlertTitle>Import failed</AlertTitle>
             <AlertDescription>{notice.text}</AlertDescription>
           </Alert>
         )}

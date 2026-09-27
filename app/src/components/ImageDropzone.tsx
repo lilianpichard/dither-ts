@@ -103,11 +103,12 @@ export function ImageDropzone({
             leading ? "w-11" : "size-4",
           )}
         >
-          {leading ?? (busy ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <Upload className={cn("size-3.5", dragging && "animate-bounce text-foreground")} />
-          ))}
+          {leading ??
+            (busy ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Upload className={cn("size-3.5", dragging && "animate-bounce text-foreground")} />
+            ))}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-body font-bold text-foreground">

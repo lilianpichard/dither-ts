@@ -292,7 +292,10 @@ function legacyName(raw: Record<string, unknown>, nameHint?: string): string {
 
 /** Convert one legacy preset object into a v1 preset plus every migration warning. */
 export function migrateLegacyPreset(raw: Record<string, unknown>, nameHint?: string): ParseResult {
-  const warnings = ["legacy Dither Guy preset, migrated"];
+  // Only notes that describe an actual change belong here. A blanket
+  // "migrated" line repeated once per preset told the reader nothing and
+  // buried the notes that did matter.
+  const warnings: string[] = [];
   const operations = legacyOperations(raw, warnings);
   const preset: Preset = {
     version: PRESET_VERSION,

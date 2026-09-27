@@ -7,7 +7,7 @@ import ToolsPanel from "./ToolsPanel";
 // only hidden. These tests read the rendered markup: without forceMount the
 // batch input is simply not there while another tab is showing.
 function render(tool: "presets" | "batch"): string {
-  return renderToStaticMarkup(<ToolsPanel tool={tool} onTool={() => {}} />);
+  return renderToStaticMarkup(<ToolsPanel tool={tool} onTool={() => {}} height={300} />);
 }
 
 const BATCH_INPUT = 'aria-label="Batch images"';

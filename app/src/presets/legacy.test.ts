@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 import { isLegacyPreset, migrateLegacyPreset } from "./legacy";
 import { parsePresetJson } from "./schema";
 
@@ -69,7 +69,7 @@ describe("minimal legacy migration", () => {
     expect(preset!.params.pixelSize).toBe(1);
     expect(preset!.params.palette).toBe("B&W");
     expect(preset!.effects).toEqual([]);
-    expect(warnings).toEqual(["legacy Dither Guy preset, migrated"]);
+    expect(warnings).toEqual([]);
   });
 
   it("migrates a preset that only carries colour multipliers", () => {
@@ -80,13 +80,13 @@ describe("minimal legacy migration", () => {
     });
     expect(preset!.params.method).toBe("Floyd-Steinberg");
     expect(preset!.operations).toEqual({ brightness: 0.2, contrast: -0.2, saturation: 0.5 });
-    expect(warnings).toEqual(["legacy Dither Guy preset, migrated"]);
+    expect(warnings).toEqual([]);
   });
 
   it("takes a minimal file through parsePresetJson without a version", () => {
     const { preset, warnings } = parsePresetJson(JSON.stringify({ threshold: 200 }));
     expect(preset!.params.threshold).toBe(200);
-    expect(warnings).toEqual(["legacy Dither Guy preset, migrated"]);
+    expect(warnings).toEqual([]);
   });
 
   it("still leaves an empty object to the v1 parser", () => {
@@ -121,7 +121,11 @@ describe("legacy migration", () => {
       { type: "sharpen", params: { amount: 3 }, enabled: true },
       { type: "glow", params: { radius: 2, intensity: 33 }, enabled: true },
     ]);
-    expect(warnings[0]).toBe("legacy Dither Guy preset, migrated");
+    expect(warnings).toEqual([
+      "blur ran before dithering, now applied after it",
+      "sharpen ran before dithering, now applied after it",
+      "replacement color [245, 45, 239] is not supported: dither-ts cannot recolor dithered output",
+    ]);
   });
 
   it("warns that blur and sharpen moved after dithering", () => {
@@ -207,14 +211,14 @@ describe("legacy migration", () => {
       hue_rotate: 0,
     });
     expect(preset!.operations).toBeUndefined();
-    expect(warnings).toEqual(["legacy Dither Guy preset, migrated"]);
+    expect(warnings).toEqual([]);
     expect(preset!.name).toBe("Untitled");
   });
 
   it("stays quiet about fields a minimal legacy file leaves out", () => {
     // Omitting a field is the file's choice, not a defect: only bad values warn.
     const { preset, warnings } = migrateLegacyPreset({ method: "Bayer 4x4" });
-    expect(warnings).toEqual(["legacy Dither Guy preset, migrated"]);
+    expect(warnings).toEqual([]);
     expect(preset!.params.method).toBe("Bayer 4x4");
     expect(preset!.params.threshold).toBe(128);
     expect(preset!.params.pixelSize).toBe(1);
@@ -222,7 +226,7 @@ describe("legacy migration", () => {
 
   it("defaults a minimal file that names nothing at all", () => {
     const { preset, warnings } = migrateLegacyPreset({ threshold: 90 });
-    expect(warnings).toEqual(["legacy Dither Guy preset, migrated"]);
+    expect(warnings).toEqual([]);
     expect(preset!.params.method).toBe("Floyd-Steinberg");
     expect(preset!.params.threshold).toBe(90);
   });
@@ -262,8 +266,10 @@ describe("legacy migration", () => {
   it("distinguishes an omitted field from one set to a wrong type", () => {
     const absent = migrateLegacyPreset({ method: "Bayer 4x4" }).warnings;
     const wrongType = migrateLegacyPreset({ method: "Bayer 4x4", contrast: "1" }).warnings;
-    expect(absent).toHaveLength(1);
-    expect(wrongType).toHaveLength(2);
+    // A field left out is not a problem worth a word; a field set to the wrong
+    // type is, and that is the whole difference between the two cases.
+    expect(absent).toHaveLength(0);
+    expect(wrongType).toHaveLength(1);
     expect(wrongType).toContain('contrast "1" is not a number, ignored');
   });
 
@@ -272,9 +278,7 @@ describe("legacy migration", () => {
     expect(preset!.effects).toEqual([]);
     expect(warnings).toContain("glow_intensity 40 has no glow_radius to act on, ignored");
     // A zero intensity asks for nothing, so it is not a lost setting.
-    expect(migrateLegacyPreset({ glow_intensity: 0 }).warnings).toEqual([
-      "legacy Dither Guy preset, migrated",
-    ]);
+    expect(migrateLegacyPreset({ glow_intensity: 0 }).warnings).toEqual([]);
     // Neither does a radius on its own.
     expect(migrateLegacyPreset({ glow_radius: 0, glow_intensity: 40 }).warnings).toContain(
       "glow_intensity 40 has no glow_radius to act on, ignored",
@@ -286,7 +290,7 @@ describe("legacy migration", () => {
     expect(preset!.effects).toEqual([
       { type: "glow", params: { radius: 4, intensity: 60 }, enabled: true },
     ]);
-    expect(warnings).toEqual(["legacy Dither Guy preset, migrated"]);
+    expect(warnings).toEqual([]);
   });
 
   it("prefers a negative radius complaint over an orphaned intensity", () => {
@@ -311,11 +315,11 @@ describe("legacy migration", () => {
   });
 
   it("stays quiet about denoise and smooth fields that are absent or zero", () => {
-    expect(migrateLegacyPreset({ method: "Bayer 4x4" }).warnings).toHaveLength(1);
+    expect(migrateLegacyPreset({ method: "Bayer 4x4" }).warnings).toHaveLength(0);
     expect(
       migrateLegacyPreset({ pre_denoise: 0, pre_smooth: 0, post_denoise: 0, post_smooth: 0 })
         .warnings,
-    ).toEqual(["legacy Dither Guy preset, migrated"]);
+    ).toEqual([]);
   });
 
   it("reports a replacement colour of the wrong shape", () => {
@@ -324,9 +328,7 @@ describe("legacy migration", () => {
   });
 
   it("does not treat a null replacement colour as a problem", () => {
-    expect(migrateLegacyPreset({ color: null }).warnings).toEqual([
-      "legacy Dither Guy preset, migrated",
-    ]);
+    expect(migrateLegacyPreset({ color: null }).warnings).toEqual([]);
   });
 
   it("wraps hue_rotate into the -180..180 range operations accept", () => {
@@ -360,7 +362,7 @@ describe("legacy migration", () => {
   it("stays quiet about a palette name that is absent", () => {
     const { preset, warnings } = migrateLegacyPreset({ method: "Bayer 4x4" });
     expect(preset!.params.palette).toBe("B&W");
-    expect(warnings).toEqual(["legacy Dither Guy preset, migrated"]);
+    expect(warnings).toEqual([]);
   });
 
   it("prefers a valid custom palette over the named one", () => {
