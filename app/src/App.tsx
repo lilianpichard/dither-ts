@@ -269,22 +269,26 @@ export default function App() {
         />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3">
           <section className="relative flex min-h-32 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-canvas">
-            {source && shown ? (
+            {source ? (
               <>
                 <CanvasViewport source={source} result={shown} />
-                <p className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-label text-muted-foreground">
-                  {shown.width}×{shown.height} · {params.method.toUpperCase()} · {params.threshold}{" "}
-                  · {params.pixelSize}px
-                </p>
+                {shown ? (
+                  <p className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-label text-muted-foreground">
+                    {shown.width}×{shown.height} · {params.method.toUpperCase()} ·{" "}
+                    {params.threshold} · {params.pixelSize}px
+                  </p>
+                ) : null}
+                {rendering ? (
+                  // An overlay, not a replacement: swapping the subtree out would
+                  // unmount the viewport and throw away the zoom and pan on every
+                  // parameter tweak, so the canvas keeps the previous frame up
+                  // until the new one is ready to paint over it.
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                    <AnalyzingImage className="size-16" />
+                    <p className="text-label uppercase">Processing</p>
+                  </div>
+                ) : null}
               </>
-            ) : source ? (
-              // A param change clears the result, so there is a frame with a
-              // source but nothing to show. That is a render in flight, not an
-              // empty app, so it gets a loader rather than the drop prompt.
-              <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-                <AnalyzingImage className="size-16" />
-                <p className="text-label uppercase">Processing</p>
-              </div>
             ) : (
               <Empty className="h-full">
                 <EmptyHeader>

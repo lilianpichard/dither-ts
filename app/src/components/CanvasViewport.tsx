@@ -2,12 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, Maximize, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "cn";
 import type { ImageSource, RenderResult } from "../store";
-
-interface View {
-  scale: number;
-  ox: number;
-  oy: number;
-}
+import { fitView, type View } from "./canvasFit";
 
 function imageToCanvas(pixels: ArrayBuffer, w: number, h: number): HTMLCanvasElement {
   const c = document.createElement("canvas");
@@ -80,27 +75,42 @@ export default function CanvasViewport({
     () => (source ? imageToCanvas(source.pixels, source.width, source.height) : null),
     [source],
   );
-  const resultCanvas = useMemo(
-    () => (result ? imageToCanvas(result.pixels, result.width, result.height) : null),
-    [result],
+  // A parameter change clears `result` while the next render is in flight. Keep
+  // painting the previous frame rather than flashing the source, so the viewport
+  // stays on the same pixels throughout and the zoom below is never disturbed.
+  const lastResultRef = useRef<RenderResult | null>(result);
+  if (result) lastResultRef.current = result;
+  const shownResult = result ?? lastResultRef.current;
+
+  const shownCanvas = useMemo(
+    () =>
+      shownResult ? imageToCanvas(shownResult.pixels, shownResult.width, shownResult.height) : null,
+    [shownResult],
   );
-  const active = comparing ? (sourceCanvas ?? resultCanvas) : (resultCanvas ?? sourceCanvas);
 
-  const fit = useCallback(() => {
-    if (!active || size.w === 0) return;
-    // Leave room for the meta line that sits along the bottom edge.
-    const scale = Math.min(size.w / active.width, (size.h - 28) / active.height);
-    setView({
-      scale,
-      ox: (size.w - active.width * scale) / 2,
-      oy: (size.h - active.height * scale) / 2,
-    });
-  }, [active, size]);
+  const active = comparing ? (sourceCanvas ?? shownCanvas) : (shownCanvas ?? sourceCanvas);
 
-  // Refit when the image or the box changes.
+  // Everything is expressed in source-image space. A heavy method renders a
+  // downscaled preview first and the full-resolution result second, so the two
+  // have different pixel dimensions; drawing both into the source rect means a
+  // render landing changes no geometry, and the zoom survives it.
+  const geometry = sourceCanvas ?? shownCanvas;
+
+  const fitTo = useCallback(() => {
+    if (!geometry || size.w === 0) return;
+    setView(fitView(size.w, size.h, geometry.width, geometry.height));
+  }, [geometry, size]);
+
+  // Explicit "show the whole thing" actions: the fit button, double-click and 0.
+  const fit = useCallback(fitTo, [fitTo]);
+
+  // Refit only for a new image or a resized box. Neither `result` nor `comparing`
+  // takes part: a render replaces `result` on every parameter tweak, and compare
+  // swaps which canvas is painted. Either one resetting the view would make it
+  // impossible to judge a dithering change at a fixed magnification.
   useEffect(() => {
-    fit();
-  }, [fit]);
+    fitTo();
+  }, [fitTo]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -113,17 +123,25 @@ export default function CanvasViewport({
     return () => ro.disconnect();
   }, []);
 
-  // Paint on every relevant change.
+  // Paint on every relevant change. The destination rect comes from `geometry`
+  // (the source), not from `active`, so a downscaled preview fills exactly the
+  // same area the full-resolution result will.
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !active) return;
+    if (!canvas || !active || !geometry) return;
     canvas.width = Math.max(1, Math.floor(size.w));
     canvas.height = Math.max(1, Math.floor(size.h));
     const ctx = canvas.getContext("2d")!;
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(active, view.ox, view.oy, active.width * view.scale, active.height * view.scale);
-  }, [active, view, size]);
+    ctx.drawImage(
+      active,
+      view.ox,
+      view.oy,
+      geometry.width * view.scale,
+      geometry.height * view.scale,
+    );
+  }, [active, geometry, view, size]);
 
   const zoomAt = useCallback(
     (factor: number, cx?: number, cy?: number) => {
