@@ -70,11 +70,18 @@ export default function ToolsPanel({
           >
             <BatchPanel />
           </TabsContent>
-          <TabsContent value="timeline" className="h-full">
+          <TabsContent
+            value="timeline"
+            // Same reasoning as batch: a loaded clip and any export in flight
+            // outlive a tab switch, and unmounting revoked the object URL, so
+            // leaving the tab threw the clip away. Hidden rather than removed.
+            forceMount
+            className="h-full data-[state=inactive]:hidden"
+          >
             {/* The encoder chunk loads on first open; a blank panel would read
                 as an empty tool rather than a pending one. */}
             <Suspense fallback={<Skeleton className="h-24 w-full" />}>
-              <Timeline />
+              <Timeline active={tool === "timeline"} />
             </Suspense>
           </TabsContent>
           <TabsContent value="export" className="h-full">

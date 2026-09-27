@@ -150,6 +150,10 @@ export const useApp = create<AppState>()((set) => ({
       operations: fitToSource(source, state.operations),
       result: null,
       preview: null,
+      // Loading an image hands the canvas back to it. The timeline keeps its
+      // clip either way and re-asserts the frame when its tab is reopened, so
+      // this is a change of subject, not a discard.
+      videoPreview: null,
       rendering: false,
       previewScaled: false,
     })),

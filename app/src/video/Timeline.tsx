@@ -15,6 +15,7 @@ import { cancelAll, renderImage } from "../worker/client";
 import { getPool } from "../worker/pool";
 import { stripKeys } from "../presets/store";
 import { resolveColorMode, useApp } from "../store";
+import type { VideoPreview } from "../store";
 import type { Frame } from "../preview/frame";
 import { announceProgress } from "../progress";
 import { formatEta } from "../batch/queue";
@@ -76,7 +77,7 @@ function clipKeyOf(clip: LoadedClip): string {
   return `${clip.info.width}x${clip.info.height}@${clip.info.duration.toFixed(3)}`;
 }
 
-export default function Timeline() {
+export default function Timeline({ active = true }: { active?: boolean }) {
   const params = useApp((s) => s.params);
   const effects = useApp((s) => s.effects);
   const operations = useApp((s) => s.operations);
@@ -105,6 +106,8 @@ export default function Timeline() {
   const clipRef = useRef<LoadedClip | null>(null);
   const loadSeq = useRef(0);
   const previewSeq = useRef(0);
+  /** The last frame published, so reopening the tab can reclaim the canvas. */
+  const lastPreviewRef = useRef<VideoPreview | null>(null);
   const loopRef = useRef(false);
   const playingRef = useRef(false);
   const previewAt = useRef<number | null>(null);
@@ -227,12 +230,15 @@ export default function Timeline() {
     // painting here. `geometry` is the preview size, which is constant for a clip:
     // that keeps the surface's zoom still while frames stream in, and makes 100%
     // mean one preview pixel per screen pixel.
-    setVideoPreview({
+    const published: VideoPreview = {
       display: { width: res.width, height: res.height, pixels: res.pixels },
       compare: geometry,
       geometry,
       clipKey: clipKeyOf(clip),
-    });
+    };
+    lastPreviewRef.current = published;
+    setVideoPreview(published);
+
     // The frame is current again, so any earlier preview error is stale.
     if (!working) setError("");
   }
@@ -289,8 +295,24 @@ export default function Timeline() {
     void previewRef.current(0);
   }, [clip]);
 
-  // The tab unmounts this panel on switch, so hand the canvas back to the still
-  // image rather than leave a frame that no longer has a timeline under it.
+  // The tab hides this panel rather than unmounting it, so the clip survives a
+  // switch. Pause instead: the playback loop is a rAF chain, and left running it
+  // would keep decoding and playing audio behind another tab. The playhead, the
+  // clip and the published frame all stay where they are.
+  useEffect(() => {
+    if (active) {
+      // Reopening the tab takes the canvas back. Loading an image has meanwhile
+      // claimed it, and this is how the video gets it again without a re-render.
+      if (lastPreviewRef.current) setVideoPreview(lastPreviewRef.current);
+      return;
+    }
+    clipRef.current?.element.pause();
+    setPlaying(false);
+    resetLivePreview();
+  }, [active]);
+
+  // Real teardown only, now that the tab hides rather than unmounts. Hand the
+  // canvas back so a frame is never left with no timeline behind it.
   useEffect(() => {
     return () => setVideoPreview(null);
   }, [setVideoPreview]);
