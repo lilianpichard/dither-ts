@@ -10,6 +10,38 @@ export type ExportFrameSource = AsyncIterable<ExportFrame> | Iterable<ExportFram
 
 export const DEFAULT_EXPORT_MAX_BYTES = 256 * 1024 * 1024;
 
+/**
+ * Bits per pixel per frame, and the bounds around it.
+ *
+ * A dither is high-frequency detail by definition, and a rate controller spends
+ * its budget on the large flat areas first, so the dots are the first thing to go.
+ * At 0.12 the dots turned to smears: a 1080p dither came back visibly blurred even
+ * though the frames handed to the encoder were full resolution. Half a bit per
+ * pixel keeps them. The floor keeps a small clip off an absurdly low ceiling, and
+ * the cap stops a 4K export from producing a file nobody wants.
+ */
+const BITS_PER_PIXEL = 0.5;
+const MIN_BITRATE = 8_000_000;
+const MAX_BITRATE = 80_000_000;
+
+export function targetBitrate(width: number, height: number, fps: number): number {
+  const raw = width * height * fps * BITS_PER_PIXEL;
+  return Math.round(Math.min(MAX_BITRATE, Math.max(MIN_BITRATE, raw)));
+}
+
+/**
+ * H.264 level for a frame size, as an `avc1.6400XX` string.
+ *
+ * The level caps resolution and rate, and it was pinned at 4.0, which cannot carry
+ * 4K. Since the export now defaults to full resolution, a 4K clip would ask the
+ * encoder for a stream its own configuration forbids.
+ */
+export function avcCodecString(width: number, height: number): string {
+  const pixels = width * height;
+  const level = pixels <= 1920 * 1080 ? 0x28 : pixels <= 2560 * 1440 ? 0x32 : 0x33;
+  return `avc1.6400${level.toString(16).padStart(2, "0")}`;
+}
+
 export interface ExportOptions {
   signal?: AbortSignal;
   controller?: AbortController;
@@ -323,10 +355,10 @@ export async function exportMp4(
       },
     });
     encoder.configure({
-      codec: "avc1.640028",
+      codec: avcCodecString(first.width, first.height),
       width: first.width,
       height: first.height,
-      bitrate: first.width * first.height * fps * 0.12,
+      bitrate: targetBitrate(first.width, first.height, fps),
     });
 
     let frame: ExportFrame | undefined = first;

@@ -17,6 +17,7 @@ import { stripKeys } from "../presets/store";
 import { resolveColorMode, useApp } from "../store";
 import type { VideoPreview } from "../store";
 import type { Frame } from "../preview/frame";
+import { warnIfSlow } from "../lib/slowOperation";
 import { announceProgress } from "../progress";
 import { formatEta } from "../batch/queue";
 import {
@@ -67,7 +68,8 @@ interface CapturedInput {
 }
 
 const PREVIEW_SCOPE = "timeline-preview";
-const EXPORT_RENDER_TIMEOUT_MS = 30_000;
+/** Longer than an image render: a video export is many renders, not one. */
+const SLOW_EXPORT_WARNING_MS = 8000;
 
 /**
  * Identifies the loaded clip for the preview surface's `resetKey`, so a different
@@ -86,6 +88,9 @@ export default function Timeline({ active = true }: { active?: boolean }) {
   const duration = clip?.info.duration ?? 0;
   const [fileName, setFileName] = useState("");
   const [time, setTime] = useState(0);
+  /** Mirrors `time` so effects can read the playhead without re-running on it. */
+  const timeRef = useRef(0);
+  timeRef.current = time;
   const [range, setRange] = useState({ start: 0, end: 0 });
   const [fps, setFps] = useState(12);
   const [temporal, setTemporal] = useState(false);
@@ -98,7 +103,10 @@ export default function Timeline({ active = true }: { active?: boolean }) {
   const [error, setError] = useState("");
   const [playing, setPlaying] = useState(false);
   const [loop, setLoop] = useState(false);
-  const [fullRes, setFullRes] = useState(false);
+  // On by default: an export capped at 720p/1080p is not worth exporting, and the
+  // wait it saves is the thing the user is explicitly willing to trade away. The
+  // switch stays for when a fast draft matters more than the resolution.
+  const [fullRes, setFullRes] = useState(true);
   const exportAbort = useRef<AbortController | null>(null);
   const exportPool = useRef<ReturnType<typeof getPool> | null>(null);
   const previewAbort = useRef<AbortController | null>(null);
@@ -295,6 +303,22 @@ export default function Timeline({ active = true }: { active?: boolean }) {
     void previewRef.current(0);
   }, [clip]);
 
+  // Mirror the still image, which re-renders whenever the settings change. Without
+  // this the preview ignored the method, palette, threshold, pixel size, colour
+  // mode and effects entirely, and only caught up on the next scrub: picking
+  // "original" looked like it did nothing. The play loop re-renders every frame
+  // and reads these fresh, so stepping in is only needed while paused — seeking
+  // mid-playback would fight the advancing element.
+  //
+  // Only when the video already owns the canvas. Loading an image clears the
+  // preview and rewrites `operations` through fitToSource, and publishing again
+  // here would let the video snatch the canvas straight back from the image.
+  useEffect(() => {
+    if (!clip || playingRef.current) return;
+    if (!useApp.getState().videoPreview) return;
+    void previewFrame(timeRef.current);
+  }, [clip, params, effects, operations]);
+
   // The tab hides this panel rather than unmounting it, so the clip survives a
   // switch. Pause instead: the playback loop is a rAF chain, and left running it
   // would keep decoding and playing audio behind another tab. The playhead, the
@@ -441,6 +465,12 @@ export default function Timeline({ active = true }: { active?: boolean }) {
     exportAbort.current = controller;
     setWorking(true);
     setError("");
+    // Armed here so a quick export never nags, and cancelled in the finally so a
+    // fast one never warns after the fact.
+    const cancelSlowWarning = warnIfSlow(
+      SLOW_EXPORT_WARNING_MS,
+      "Exporting at full quality: a long clip can take a while.",
+    );
     try {
       const snapshot = { ...params };
       const fx = stripKeys(useApp.getState().effects);
@@ -511,7 +541,10 @@ export default function Timeline({ active = true }: { active?: boolean }) {
             },
             [copy],
             undefined,
-            { signal: controller.signal, timeout: EXPORT_RENDER_TIMEOUT_MS },
+            // No deadline: a long frame is the cost of the resolution the user
+            // asked for, and cutting it off threw the export away. The slow-path
+            // toast below says a wait is coming instead.
+            { signal: controller.signal },
           );
           const elapsed = performance.now() - jobStart;
           recent.push(elapsed);
@@ -560,6 +593,10 @@ export default function Timeline({ active = true }: { active?: boolean }) {
               controller,
               total,
               monochrome: !snapshot.color,
+              // Original mode already posterises, so the frame's own colours fit
+              // in a GIF and are the right palette. Applying the chosen one on top
+              // was a second reduction, and the reason those exports looked mushy.
+              keepFrameColours: resolveColorMode(snapshot) === "original",
             });
 
       if (controller.signal.aborted) throw captureAbortError();
@@ -582,6 +619,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
         setPhase("");
       }
     } finally {
+      cancelSlowWarning();
       if (exportAbort.current === controller) exportAbort.current = null;
       if (exportPool.current === pool) exportPool.current = null;
       setWorking(false);

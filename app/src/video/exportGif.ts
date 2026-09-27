@@ -14,6 +14,12 @@ import {
 export interface GifExportOptions extends ExportOptions {
   monochrome?: boolean;
   color?: boolean;
+  /**
+   * Take the GIF palette from the first frame's own colours when it has few
+   * enough to fit. Set for original colour mode, where the frame is already
+   * posterised and the chosen palette would be a second, needless reduction.
+   */
+  keepFrameColours?: boolean;
 }
 
 function hasPalette(name: string): boolean {
@@ -56,6 +62,28 @@ function gifByteLength(gif: ReturnType<typeof GIFEncoder>): number {
   return gif.bytes().byteLength;
 }
 
+/**
+ * The distinct RGB values a frame actually contains, or `null` if there are more
+ * than a GIF can hold.
+ *
+ * Original colour mode posterises to a handful of levels per channel, so a frame
+ * has far fewer than 256 colours and the GIF can be exact. Forcing the chosen
+ * palette on it instead was what made those exports look like a blurry mess.
+ */
+export function exactFramePalette(
+  data: Uint8ClampedArray,
+  limit = 256,
+): Array<[number, number, number]> | null {
+  const seen = new Set<number>();
+  for (let i = 0; i + 2 < data.length; i += 4) {
+    if (data[i + 3] === 0) continue;
+    // Pack to one integer: three bytes cannot collide in a 32-bit int.
+    seen.add((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
+    if (seen.size > limit) return null;
+  }
+  return [...seen].map((packed) => [(packed >> 16) & 255, (packed >> 8) & 255, packed & 255]);
+}
+
 export async function exportGif(
   frames: ExportFrameSource,
   fps: number,
@@ -67,8 +95,11 @@ export async function exportGif(
   const signal = options.signal ?? options.controller?.signal;
   throwIfAborted(signal);
   const monochrome = options.monochrome ?? options.color === false;
-  const palette = resolveExportPalette(paletteRef, monochrome);
-  const gifPalette: Array<[number, number, number]> = palette.map((color) => [
+  const fallback = resolveExportPalette(paletteRef, monochrome);
+  // The palette is fixed for the whole file, so it is settled from the first
+  // frame: either that frame's own colours, or the configured palette.
+  let palette = fallback;
+  let gifPalette: Array<[number, number, number]> = fallback.map((color) => [
     color[0],
     color[1],
     color[2],
@@ -97,6 +128,13 @@ export async function exportGif(
       if (width === undefined) {
         width = frame.width;
         height = frame.height;
+        if (!monochrome && options.keepFrameColours) {
+          const exact = exactFramePalette(frame.data);
+          if (exact && exact.length > 0) {
+            palette = exact.map(([r, g, b]) => [r, g, b]);
+            gifPalette = exact;
+          }
+        }
       } else if (frame.width !== width || frame.height !== height) {
         throw new Error("all export frames must have the same dimensions");
       }

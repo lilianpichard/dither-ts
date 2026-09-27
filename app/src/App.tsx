@@ -13,6 +13,7 @@ import { TopBar } from "./components/TopBar";
 import { AnalyzingImage } from "./components/AnalyzingImage";
 import { PanelResizer } from "./components/PanelResizer";
 import { usePanelSize } from "./lib/panelSize";
+import { SLOW_OPERATION_MS, warnIfSlow } from "./lib/slowOperation";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -23,7 +24,6 @@ import {
 } from "@/components/ui/empty";
 import { Toaster } from "@/components/ui/sonner";
 
-const APP_RENDER_TIMEOUT = 30_000;
 const APP_RENDER_SCOPE = "app-preview";
 const RAIL_MIN = 176;
 const CONSOLE_MIN = 120;
@@ -122,6 +122,12 @@ export default function App() {
     setPreviewScaled(false);
     const timer = setTimeout(async () => {
       if (controller.signal.aborted) return;
+      // Armed per job and disarmed on the way out, so a slow render only ever
+      // produces one notice and a fast one produces none.
+      const cancelSlowWarning = warnIfSlow(
+        SLOW_OPERATION_MS,
+        "Large image: dithering at full quality can take a while.",
+      );
       try {
         let width = source.width;
         let height = source.height;
@@ -184,7 +190,7 @@ export default function App() {
               partial: true,
             });
           },
-          { signal: controller.signal, timeout: APP_RENDER_TIMEOUT, scope: APP_RENDER_SCOPE },
+          { signal: controller.signal, scope: APP_RENDER_SCOPE },
         );
         if (controller.signal.aborted || renderAbort.current !== controller || jobId !== jobSeq) {
           return;
@@ -203,6 +209,8 @@ export default function App() {
         setResult(null);
         setPreviewScaled(false);
         toast.error(`Render failed: ${error instanceof Error ? error.message : String(error)}`);
+      } finally {
+        cancelSlowWarning();
       }
     }, 250);
     return () => {
