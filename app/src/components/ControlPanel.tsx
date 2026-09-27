@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { cn } from "cn";
-import { METHOD_NAMES, PALETTES, type DitherMethod } from "../../../src/index.js";
+import { METHOD_NAMES, PALETTES, supportsColor, type DitherMethod } from "../../../src/index.js";
+import { toast } from "sonner";
 import { resolveColorMode, useApp } from "../store";
 import { describeRenderStatus } from "../status";
 import PaletteEditor from "../palette/PaletteEditor";
@@ -132,6 +133,29 @@ export default function ControlPanel({
   // A stored preset may predate the mode, and `color: false` wins over either.
   const colorMode = !params.color ? "off" : resolveColorMode(params);
 
+  // The variable-error diffusion family has no colour form
+  function onMethodChange(method: DitherMethod): void {
+    if (params.color && !supportsColor(method)) {
+      setParams({ method, color: false });
+      toast.info(`${method} is greyscale only, so colour was turned off.`);
+      return;
+    }
+    setParams({ method });
+  }
+
+  function onColorModeChange(mode: "off" | "palette" | "original"): void {
+    if (mode !== "off" && !supportsColor(params.method)) {
+      // The other direction of the same clash
+      setParams({ method: "Floyd-Steinberg", color: true, colorMode: mode });
+      toast.info(`${params.method} is greyscale only - switched to Floyd-Steinberg.`);
+      return;
+    }
+    setParams({
+      color: mode !== "off",
+      ...(mode === "off" ? {} : { colorMode: mode }),
+    });
+  }
+
   return (
     <aside
       // The width is published as a custom property rather than a bare inline
@@ -154,7 +178,7 @@ export default function ControlPanel({
       <Field label="Method">
         <Select
           value={params.method}
-          onValueChange={(value) => setParams({ method: value as DitherMethod })}
+          onValueChange={(value) => onMethodChange(value as DitherMethod)}
         >
           <SelectTrigger id="ctl-method" aria-label="Method">
             <SelectValue />
@@ -182,12 +206,7 @@ export default function ControlPanel({
                 type="button"
                 role="radio"
                 aria-checked={active}
-                onClick={() =>
-                  setParams({
-                    color: m.id !== "off",
-                    ...(m.id === "off" ? {} : { colorMode: m.id }),
-                  })
-                }
+                onClick={() => onColorModeChange(m.id)}
                 className={cn(
                   "h-6.5 flex-1 cursor-pointer rounded-md text-caption whitespace-nowrap transition-colors",
                   "focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none",

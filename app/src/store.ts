@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ColorMode, DitherMethod, EffectInstance, RGB } from "../../src/index.js";
-import { defaultEffectParams } from "../../src/index.js";
+import { defaultEffectParams, supportsColor } from "../../src/index.js";
 import {
   EMPTY_HISTORY,
   commitHistory,
@@ -159,7 +159,14 @@ export const useApp = create<AppState>()((set) => ({
     })),
   setParams: (params, operations) =>
     set((state) => {
-      const nextParams = { ...state.params, ...params };
+      // The variable-error diffusion family has no colour form, so colour and one
+      // of those methods cannot be combined: the render would be rejected in the
+      // worker. Presets, undo and import all land here, so this is the one place
+      // that can keep the pair valid. The controls explain the change as it
+      // happens; this is the backstop for the routes that do not go through them.
+      const merged = { ...state.params, ...params };
+      const nextParams =
+        merged.color && !supportsColor(merged.method) ? { ...merged, color: false } : merged;
       // A second argument replaces the whole operation set, so applying a
       // preset without operations clears the previous ones.
       const nextOperations =

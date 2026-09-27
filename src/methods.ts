@@ -73,6 +73,18 @@ export function getMethod(name: string): MethodDefinition | undefined {
   return Object.hasOwn(METHOD_REGISTRY, name) ? METHOD_REGISTRY[name as DitherMethod] : undefined;
 }
 
+/**
+ * Whether a method can produce a colour image at all
+ */
+export function supportsColor(name: DitherMethod): boolean {
+  return METHOD_REGISTRY[name].supports.color;
+}
+
+/** The methods with no colour form: they can only run greyscale. */
+export function greyscaleOnlyMethods(): DitherMethod[] {
+  return (Object.keys(METHOD_REGISTRY) as DitherMethod[]).filter((name) => !supportsColor(name));
+}
+
 export function isOrderedMethod(name: DitherMethod): name is OrderedMethod {
   return getMethod(name)?.family === "ordered";
 }

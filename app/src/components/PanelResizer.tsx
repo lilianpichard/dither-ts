@@ -50,7 +50,7 @@ export function PanelResizer({
       aria-valuemin={min}
       aria-valuemax={Math.round(max)}
       tabIndex={0}
-      title={`${label} — drag to resize, double-click to collapse`}
+      title={`${label} - drag to resize, double-click to collapse`}
       onDoubleClick={onToggle}
       onKeyDown={(e) => {
         const step = e.shiftKey ? 40 : 12;
