@@ -17,6 +17,9 @@
     "test": "node --test test/*.test.js"
   },
   "license": "GPL-3.0-only",
+  "engines": {
+    "node": ">=22.12"
+  },
   "devDependencies": {
     "electron": "^44.4.5",
     "electron-builder": "^26.15.3",
@@ -76,7 +79,7 @@
       "icon": "build/icons",
       "maintainer": "Lilian Pichard",
       "synopsis": "Dither images and video with 24 algorithms",
-      "description": "Dither images and video with 24 algorithms, 11 palettes and a stackable effects pipeline. Runs entirely offline.",
+        "description": "Dither images and video with 24 algorithms, 11 palettes and a stackable effects pipeline. Runs entirely offline.",
       "desktop": {
         "entry": {
           "Name": "dither-ts",
