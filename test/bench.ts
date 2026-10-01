@@ -50,6 +50,9 @@ bench("glow+sharpen @1080p", () => {
 bench("Floyd-Steinberg @1080p", () => {
   diffuseBW(gray, "Floyd-Steinberg", 128);
 });
+bench("Atkinson @1080p", () => {
+  diffuseBW(gray, "Atkinson", 128);
+});
 bench("Floyd-Steinberg hook-on @1080p", () => {
   diffuseBW(gray, "Floyd-Steinberg", 128, () => {});
 });

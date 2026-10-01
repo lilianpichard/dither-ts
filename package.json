@@ -1,34 +1,90 @@
 {
   "name": "dither-ts",
   "version": "0.1.0",
-  "description": "Open source dithering experiment in TypeScript",
+  "description": "Dithering toolkit in TypeScript: 24 algorithms, 11 palettes and a stackable effects pipeline, with no runtime dependencies",
+  "keywords": [
+    "dithering",
+    "dither",
+    "error-diffusion",
+    "ordered-dither",
+    "image-processing",
+    "ascii-art",
+    "palette",
+    "typescript",
+    "wasm-free"
+  ],
+  "homepage": "https://github.com/lilianpichard/dither-ts#readme",
+  "bugs": {
+    "url": "https://github.com/lilianpichard/dither-ts/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lilianpichard/dither-ts.git"
+  },
+  "license": "GPL-3.0-only",
+  "author": "Lilian Pichard",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./assets/*.webp": {
+      "types": "./types/assets.d.ts",
+      "default": "./assets/*.webp"
+    },
+    "./assets/*.svg": {
+      "types": "./types/assets.d.ts",
+      "default": "./assets/*.svg"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "assets",
+    "types"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.12"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
     "build:all": "npm run build && npm --prefix app run build",
+    "build:test": "npm run clean:test && tsc -p tsconfig.test.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "clean:test": "node -e \"require('node:fs').rmSync('dist-test',{recursive:true,force:true})\"",
     "coverage:all": "npm run coverage:node && npm run coverage:app",
     "coverage:app": "npm --prefix app run coverage",
-    "coverage:node": "npm run build && c8 --all --include=\"dist/src/**/*.js\" --exclude=\"dist/test/**\" --reporter=text --reporter=lcov --check-coverage --lines=20 --functions=20 --branches=10 --statements=20 node --test dist/test/*.test.js",
+    "coverage:node": "npm run build:test && c8 --all --include=\"dist-test/src/**/*.js\" --exclude=\"dist-test/test/**\" --reporter=text --reporter=lcov --check-coverage --lines=90 --functions=90 --branches=80 --statements=90 node --test dist-test/test/*.test.js",
     "dev": "npm --prefix app run dev",
     "desktop": "npm --prefix app run build && npm --prefix electron run dev",
-    "start": "serve .",
-    "test": "npm run build && node --test dist/test/*.test.js",
+    "serve": "serve app/dist",
+    "serve:demo": "serve .",
+    "start": "npm run build:all && npm run serve",
+    "test": "npm run build:test && node --test dist-test/test/*.test.js",
     "test:all": "npm test && npm --prefix app test && npm --prefix electron test",
     "typecheck": "tsc --noEmit",
     "verify": "npm run typecheck && npm --prefix app run typecheck && npm run test:all && npm run coverage:all && npm run lint && npm run format:check && npm run build:all",
-    "demo": "npm run build && node dist/test/smoke.js",
-    "bench": "npm run build && node dist/test/bench.js",
+    "pack:check": "npm pack --dry-run",
+    "demo": "npm run build:test && node dist-test/test/smoke.js",
+    "bench": "npm run build:test && node dist-test/test/bench.js",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "prepublishOnly": "npm run build",
     "prepare": "husky"
   },
   "lint-staged": {
-    "*.{js,ts,json,md,html}": "prettier --write",
-    "*.{js,ts}": "oxlint --fix"
+    "*.{js,ts,tsx,json,md,html,css}": "prettier --write",
+    "*.{js,ts,tsx}": "oxlint --fix"
   },
-  "license": "GPL-3.0-only",
   "devDependencies": {
     "@shadcn/lint": "^0.2.0",
     "@types/node": "^22.7.0",

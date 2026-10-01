@@ -1,4 +1,5 @@
 export * from "./types.js";
+export * from "./validation.js";
 export * from "./methods.js";
 export * from "./matrices.js";
 export * from "./palettes.js";
