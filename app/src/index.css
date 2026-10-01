@@ -20,30 +20,19 @@
   --muted-foreground: #6b6c66;
   --accent: #efede4;
   --accent-foreground: #222222;
-  --destructive: #e5484d;
-  --border: #dad7cb;
-  --input: #dad7cb;
-  --ring: #ffaa00;
-  --chart-1: #ffaa00;
-  --chart-2: #6b6c66;
-  --chart-3: #8a8577;
-  --chart-4: #cfcbb9;
-  --chart-5: #dad7cb;
+  --destructive: #c62f34;
+  /* Component boundaries need 3:1 against what they sit on (SC 1.4.11). The
+     original hairline was 1.44:1 on white, which is decoration, not a boundary. */
+  --border: #8c8877;
+  --input: #8c8877;
+  --ring: #8a6a00;
   --radius: 0.5rem;
-  --sidebar: #f5f3ec;
-  --sidebar-foreground: #222222;
-  --sidebar-primary: #ffaa00;
-  --sidebar-primary-foreground: #222222;
-  --sidebar-accent: #efede4;
-  --sidebar-accent-foreground: #222222;
-  --sidebar-border: #dad7cb;
-  --sidebar-ring: #ffaa00;
   /* Recessed stage behind the artwork, distinct from the card surface. */
   --canvas: #efede4;
   /* Raised controls: buttons, inputs, the source chip. */
   --raised: #ffffff;
-  /* Slider and switch track, lighter than the border colour. */
-  --track: #cfcbb9;
+  /* Slider and switch track: 3.68:1 on white, so the control has an edge. */
+  --track: #8a8577;
   /* Amber tuned for text on cream; the raw accent is too pale to read. */
   --accent-label: #8a6a00;
   --thumb-ring: #8a8577;
@@ -64,23 +53,11 @@
   --muted-foreground: #9a9c94;
   --accent: #242424;
   --accent-foreground: #f5f3ec;
-  --destructive: #e5484d;
-  --border: #3a3a3a;
-  --input: #3a3a3a;
+  --destructive: #ff8a8e;
+  --border: #6e6e6e;
+  --input: #6e6e6e;
+  /* Amber on dark clears 3:1 easily; light mode is the tight one. */
   --ring: #ffaa00;
-  --chart-1: #ffaa00;
-  --chart-2: #9a9c94;
-  --chart-3: #6e6e6e;
-  --chart-4: #4a4a4a;
-  --chart-5: #3a3a3a;
-  --sidebar: #0e0e0e;
-  --sidebar-foreground: #f5f3ec;
-  --sidebar-primary: #ffaa00;
-  --sidebar-primary-foreground: #0e0e0e;
-  --sidebar-accent: #242424;
-  --sidebar-accent-foreground: #f5f3ec;
-  --sidebar-border: #3a3a3a;
-  --sidebar-ring: #ffaa00;
   --canvas: #141414;
   --raised: #242424;
   --track: #4a4a4a;
@@ -93,19 +70,6 @@
   --font-heading: var(--font-sans);
   --font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
 
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);

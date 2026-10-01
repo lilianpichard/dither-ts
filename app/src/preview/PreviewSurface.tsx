@@ -32,7 +32,7 @@ function ZoomButton({
       title={`${label} (${hint})`}
       onClick={onClick}
       className={cn(
-        "flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none [&_svg]:size-3",
+        "flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none [&_svg]:size-3",
         className,
       )}
     >
@@ -267,7 +267,7 @@ export default function PreviewSurface({
           }}
           onBlur={() => setComparing(false)}
           className={cn(
-            "flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-3",
+            "flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-3",
             comparing && canCompare
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:text-foreground",

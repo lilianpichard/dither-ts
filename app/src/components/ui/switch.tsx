@@ -17,7 +17,7 @@ function Switch({
       data-slot="switch"
       data-size={size}
       className={cn(
-        "peer group/switch relative inline-flex shrink-0 items-center rounded-lg border border-transparent transition-colors outline-none group-has-[:focus-visible]/field-label:border-transparent after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=default]:h-[15px] data-[size=default]:w-[26px] data-[size=sm]:h-[13px] data-[size=sm]:w-[22px] data-checked:bg-primary data-unchecked:bg-track data-disabled:cursor-not-allowed data-disabled:opacity-50",
+        "peer group/switch relative inline-flex shrink-0 items-center rounded-lg border border-transparent transition-colors outline-none group-has-[:focus-visible]/field-label:border-transparent after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive data-[size=default]:h-[15px] data-[size=default]:w-[26px] data-[size=sm]:h-[13px] data-[size=sm]:w-[22px] data-checked:bg-primary data-unchecked:bg-track data-disabled:cursor-not-allowed data-disabled:opacity-50",
         className,
       )}
       {...props}

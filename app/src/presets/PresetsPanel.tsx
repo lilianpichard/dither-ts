@@ -47,8 +47,12 @@ function summarize(warnings: string[]): string {
   return [...counts].map(([note, n]) => (n > 1 ? `${note} (x${n})` : note)).join("; ");
 }
 
+// Only the fields that change what a thumbnail looks like. Including the name
+// meant a rename re-rendered every card and left the old data url behind
+// forever, because the map was only ever added to.
 function thumbKey(id: string, preset: Preset): string {
-  return `${id}:${JSON.stringify(preset)}`;
+  const { name: _name, ...rest } = preset;
+  return `${id}:${JSON.stringify(rest)}`;
 }
 
 async function renderThumb(preset: Preset): Promise<string> {
@@ -134,6 +138,17 @@ export default function PresetsPanel() {
     return () => {
       cancelled = true;
     };
+  }, [items]);
+
+  // Drop the thumbnails of presets that are gone, so the map does not grow for
+  // the life of the session. A key belongs to a live preset when it starts with
+  // that preset's id and the separator.
+  useEffect(() => {
+    setThumbs((prev) => {
+      const alive = (key: string) => items.some((item) => key.startsWith(`${item.id}:`));
+      const kept = new Map([...prev].filter(([key]) => alive(key)));
+      return kept.size === prev.size ? prev : kept;
+    });
   }, [items]);
 
   function download(filename: string, text: string) {
@@ -280,7 +295,7 @@ export default function PresetsPanel() {
                 >
                   <button
                     type="button"
-                    className="h-13.5 w-18 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border bg-canvas p-0 focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none"
+                    className="h-13.5 w-18 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border bg-canvas p-0 focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
                     title={`Apply ${item.preset.name}`}
                     onClick={() => {
                       applyPreset(item.preset);

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { toast } from "sonner";
 import { parsePresetJson, serializePreset, type Preset, type PresetEffect } from "./schema";
 import { PRESET_VERSION } from "./version";
 import { loadCatalog } from "./catalog";
@@ -46,11 +47,21 @@ function readCreatedAt(entry: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
+// A silent quota failure looks like a save that worked right up to the next
+// reload, so it is reported once and again only after it recovers.
+let persistComplained = false;
+
 function persist(items: SavedPreset[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    persistComplained = false;
   } catch {
     // Storage full or unavailable: presets stay in memory only.
+    if (persistComplained) return;
+    persistComplained = true;
+    toast.error(
+      "Presets could not be saved. Browser storage is full or blocked, so they last for this session only.",
+    );
   }
 }
 
@@ -61,6 +72,9 @@ export function presetToParams(preset: Preset): DitherParams {
     threshold: p.threshold,
     palette: typeof p.palette === "string" ? p.palette : p.palette.custom,
     color: p.color,
+    // Kept only when the preset carries it, so a preset written before the
+    // field existed still means "palette" through resolveColorMode.
+    ...(p.colorMode ? { colorMode: p.colorMode } : {}),
     pixelSize: p.pixelSize,
   };
 }
@@ -79,6 +93,10 @@ export function paramsToPreset(
       threshold: params.threshold,
       palette: typeof params.palette === "string" ? params.palette : { custom: params.palette },
       color: params.color,
+      // Without this, saving a preset set to Original and applying it put the
+      // app back on Palette, because the schema supported the field and the
+      // round trip dropped it.
+      ...(params.colorMode ? { colorMode: params.colorMode } : {}),
       pixelSize: params.pixelSize,
     },
     effects: effects.map((e) => ({ type: e.type, params: { ...e.params }, enabled: e.enabled })),

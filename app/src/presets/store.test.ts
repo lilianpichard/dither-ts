@@ -3,7 +3,7 @@ import { applyEffects, defaultEffectParams } from "../../../src/index.js";
 import { applyPreset, paramsToPreset, presetToParams } from "./store";
 import { parsePresetJson, serializePreset, type Preset } from "./schema";
 import { PRESET_VERSION } from "./version";
-import { useApp, type DitherParams } from "../store";
+import { useApp, resolveColorMode, type DitherParams } from "../store";
 
 const params: DitherParams = {
   method: "Floyd-Steinberg",
@@ -94,6 +94,25 @@ describe("preset conversion", () => {
 
   it("stamps the shared version constant, not a literal", () => {
     expect(paramsToPreset("V", params, []).version).toBe(PRESET_VERSION);
+  });
+
+  it("keeps the colour mode through a save and an apply", () => {
+    // The schema understood colorMode the whole time, so a preset set to
+    // Original and applied again used to come back as Palette.
+    const original = { ...params, color: true, colorMode: "original" as const };
+    const saved = paramsToPreset("Original", original, []);
+    expect(saved.params.colorMode).toBe("original");
+    expect(presetToParams(saved).colorMode).toBe("original");
+    expect(resolveColorMode(presetToParams(saved))).toBe("original");
+  });
+
+  it("leaves the field out when the preset never had one", () => {
+    // A preset written before colorMode existed means palette, and must not
+    // gain an explicit value on the way through.
+    const saved = paramsToPreset("Legacy", params, []);
+    expect("colorMode" in saved.params).toBe(false);
+    expect("colorMode" in presetToParams(saved)).toBe(false);
+    expect(resolveColorMode(presetToParams(saved))).toBe("palette");
   });
 
   it("reads back through the parser without warnings", () => {

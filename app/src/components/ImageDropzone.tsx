@@ -46,7 +46,12 @@ export function ImageDropzone({
 
   const handleFile = (file: File | undefined | null) => {
     if (!file || inactive) return;
-    if (!file.type.startsWith("image/")) return;
+    if (!file.type.startsWith("image/")) {
+      // The picker filters on accept, but a drop does not, and a silent no-op
+      // looks like the app is broken.
+      toast.error(`${file.name || "That file"} is not an image.`);
+      return;
+    }
     onFile(file);
   };
 
