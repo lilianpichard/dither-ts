@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/dither_logo.webp" alt="dither-ts" width="320">
+  <img src="assets/dither_logo_light.webp" alt="dither-ts" width="320">
 </p>
 
 <p align="center">

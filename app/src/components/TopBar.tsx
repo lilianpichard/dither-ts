@@ -4,7 +4,8 @@ import { ThemeToggle } from "./ThemeToggle";
 import { UpdateCheck } from "./UpdateCheck";
 import { Kbd } from "@/components/ui/kbd";
 import { TOOL_COUNT } from "./ToolsPanel";
-import logo from "dither-ts/assets/dither_logo.webp";
+import logoDark from "dither-ts/assets/dither_logo_dark.webp";
+import logoLight from "dither-ts/assets/dither_logo_light.webp";
 
 /** "1 SOURCE / 640×480" once loaded, "NO SOURCE / 0 PX" before. */
 function sourceState(name: string | null, width: number, height: number): string {
@@ -22,7 +23,13 @@ export function TopBar() {
 
   return (
     <header className="flex h-11 shrink-0 items-center gap-3 border-b border-border bg-card pr-3 pl-4">
-      <img src={logo} alt="Dither" className="shrink-0 w-24" />
+      <img src={logoLight} alt="DitherTS_light" className="w-24 shrink-0 dark:hidden" />
+      <img
+        src={logoDark}
+        alt="DitherTS_dark"
+        aria-hidden
+        className="hidden w-24 shrink-0 dark:block"
+      />
       <p className="absolute left-1/2 -translate-x-1/2 text-caption whitespace-nowrap text-muted-foreground">
         {sourceState(source?.name ?? null, source?.width ?? 0, source?.height ?? 0)}
       </p>
