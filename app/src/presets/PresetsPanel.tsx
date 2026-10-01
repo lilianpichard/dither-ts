@@ -78,13 +78,19 @@ async function renderThumb(preset: Preset): Promise<string> {
   const canvas = document.createElement("canvas");
   canvas.width = res.width;
   canvas.height = res.height;
-  canvas
-    .getContext("2d")!
-    .putImageData(new ImageData(new Uint8ClampedArray(res.pixels), res.width, res.height), 0, 0);
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("this browser would not give the app a 2d context");
+  context.putImageData(
+    new ImageData(new Uint8ClampedArray(res.pixels), res.width, res.height),
+    0,
+    0,
+  );
   const small = document.createElement("canvas");
   small.width = 96;
   small.height = 96;
-  small.getContext("2d")!.drawImage(canvas, 0, 0, 96, 96);
+  const smallContext = small.getContext("2d");
+  if (!smallContext) throw new Error("this browser would not give the app a 2d context");
+  smallContext.drawImage(canvas, 0, 0, 96, 96);
   return small.toDataURL();
 }
 

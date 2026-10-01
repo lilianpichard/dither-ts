@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { DEFAULT_CHARSET, exportSVG, exportTXT } from "../../../src/index.js";
 import { renderImage } from "../worker/client";
+import { DEFAULT_CHARSET, exportTXT } from "../../../src/ascii.js";
 import { useApp } from "../store";
 import { announceProgress } from "../progress";
 import { saveBlob, saveText, type SaveOutcome } from "../desktop/save";
@@ -27,6 +27,10 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Download } from "lucide-react";
 import { useConsoleMeta } from "../components/consoleMeta";
+
+// An export renders the source at full resolution, so it runs well past the
+// preview budget. Only a worker that stopped answering should trip this.
+const EXPORT_TIMEOUT_MS = 600_000;
 
 interface ExportImage {
   data: Uint8ClampedArray<ArrayBuffer>;
@@ -91,7 +95,7 @@ export default function ExportPanel() {
             nextExportProgress(update.rowsDone, update.totalRows, current),
           );
         },
-        { signal: controller.signal },
+        { signal: controller.signal, timeout: EXPORT_TIMEOUT_MS },
       );
       if (controller.signal.aborted) return;
       setExportProgress(100);
@@ -126,7 +130,8 @@ export default function ExportPanel() {
       const canvas = document.createElement("canvas");
       canvas.width = cur.width;
       canvas.height = cur.height;
-      const ctx = canvas.getContext("2d")!;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("this browser would not give the app a 2d context");
       if (mime === "image/jpeg") {
         ctx.fillStyle = "#fff";
         ctx.fillRect(0, 0, cur.width, cur.height);
@@ -141,14 +146,19 @@ export default function ExportPanel() {
     });
   }
 
+  // The vector writer is only needed when its button is pressed, so it loads then
+  // rather than sitting in the entry chunk. exportTXT is imported statically
+  // because DEFAULT_CHARSET comes from the same module, so splitting it would do
+  // nothing.
   function svg() {
-    return runExport("Exported dither.svg", (cur) =>
-      saveText(
+    return runExport("Exported dither.svg", async (cur) => {
+      const { exportSVG } = await import("../../../src/vector.js");
+      return saveText(
         exportSVG(cur.data, cur.width, cur.height, { black }),
         "dither.svg",
         "image/svg+xml",
-      ),
-    );
+      );
+    });
   }
 
   function txt() {

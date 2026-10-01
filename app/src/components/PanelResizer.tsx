@@ -34,6 +34,11 @@ export function PanelResizer({
 
   const vertical = orientation === "vertical";
   const clamp = (n: number) => Math.min(Math.max(n, min), Math.max(min, max));
+  // A collapsed panel reports size 0, which is below the minimum it declares.
+  // Assistive tech reads that as a broken value, so report the minimum and say
+  // in words that it is collapsed.
+  const collapsed = size <= 0;
+  const announced = collapsed ? Math.round(min) : Math.round(size);
 
   const apply = (next: number) => {
     const bounded = clamp(next);
@@ -46,9 +51,10 @@ export function PanelResizer({
       role="separator"
       aria-label={label}
       aria-orientation={vertical ? "vertical" : "horizontal"}
-      aria-valuenow={Math.round(size)}
+      aria-valuenow={announced}
       aria-valuemin={min}
       aria-valuemax={Math.round(max)}
+      aria-valuetext={collapsed ? `${label}, collapsed` : `${label}, ${Math.round(size)} pixels`}
       tabIndex={0}
       title={`${label} - drag to resize, double-click to collapse`}
       onDoubleClick={onToggle}

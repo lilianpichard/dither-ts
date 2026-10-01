@@ -144,7 +144,8 @@ export default function PreviewSurface({
     if (!canvas || !active || !geoW || !geoH) return;
     canvas.width = Math.max(1, Math.floor(size.w));
     canvas.height = Math.max(1, Math.floor(size.h));
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(active, view.ox, view.oy, geoW * view.scale, geoH * view.scale);
@@ -180,12 +181,15 @@ export default function PreviewSurface({
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
+      // Ctrl+C and Cmd+C are copy; treating them as compare would fight it.
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "+" || e.key === "=") zoomAt(1.2);
       else if (e.key === "-") zoomAt(1 / 1.2);
       else if (e.key === "0") fit();
       else if ((e.key === "c" || e.key === "C") && !e.repeat && canCompare) setComparing(true);
     };
     const up = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "c" || e.key === "C") setComparing(false);
     };
     window.addEventListener("keydown", down);
@@ -250,6 +254,18 @@ export default function PreviewSurface({
           onPointerUp={() => setComparing(false)}
           onPointerLeave={() => setComparing(false)}
           onPointerCancel={() => setComparing(false)}
+          // Pointer handlers alone leave this reachable by Tab but dead to a
+          // keyboard, so Enter and Space hold the compare the same way.
+          onKeyDown={(e) => {
+            if ((e.key === " " || e.key === "Enter") && canCompare) {
+              e.preventDefault();
+              setComparing(true);
+            }
+          }}
+          onKeyUp={(e) => {
+            if (e.key === " " || e.key === "Enter") setComparing(false);
+          }}
+          onBlur={() => setComparing(false)}
           className={cn(
             "flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/40 focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-3",
             comparing && canCompare

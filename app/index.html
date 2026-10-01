@@ -11,7 +11,28 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self' 'sha256-ZKcBg24qTGcXBK/iOLaJAGANYkkgaozWOfC2jbdrBTY=' 'sha256-NYTXKnI17CvCoEQFteL070w4ynkOEgG7nkOg0Gu+5ZI='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' blob: data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'"
     />
-    <title>dither-ts</title>
+    <meta
+      name="description"
+      content="Dither images and video with 24 algorithms, 11 palettes and a stackable effects pipeline. Runs entirely offline."
+    />
+    <meta name="theme-color" content="#ffaa00" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Browser tab and ios home screen, both cut from assets/dither_logo.webp. -->
+    <link rel="icon" href="./favicon.png" sizes="64x64" type="image/png" />
+    <link rel="apple-touch-icon" href="./icon-512.png" />
+    <!-- What a link unfurls into. Absolute, because a relative one is dropped. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="dither-ts" />
+    <meta
+      property="og:description"
+      content="Dither images and video with 24 algorithms, 11 palettes and a stackable effects pipeline. Runs entirely offline."
+    />
+    <meta
+      property="og:image"
+      content="https://github.com/lilianpichard/dither-ts/raw/main/app/public/og.png"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <title>dither-ts · dither images and video</title>
     <script>
       // Applies the saved or system theme before the bundle paints; mirrors the storage key in src/providers.tsx.
       (() => {

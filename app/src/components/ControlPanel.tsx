@@ -58,13 +58,13 @@ function SourceThumb({ source }: { source: NonNullable<ReturnType<typeof useSour
     const full = document.createElement("canvas");
     full.width = source.width;
     full.height = source.height;
-    full
-      .getContext("2d")!
-      .putImageData(
-        new ImageData(new Uint8ClampedArray(source.pixels), source.width, source.height),
-        0,
-        0,
-      );
+    const fullCtx = full.getContext("2d");
+    if (!fullCtx) return;
+    fullCtx.putImageData(
+      new ImageData(new Uint8ClampedArray(source.pixels), source.width, source.height),
+      0,
+      0,
+    );
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, w, h);
     const scale = Math.min(w / source.width, h / source.height);
@@ -197,6 +197,22 @@ export default function ControlPanel({
           role="radiogroup"
           aria-label="Color mode"
           className="flex gap-1 rounded-lg border border-border bg-raised p-0.5"
+          // A radiogroup is expected to move and select with the arrow keys,
+          // with only the checked radio in the tab order. Without this the
+          // buttons are reachable but not operable as a radio group.
+          onKeyDown={(e) => {
+            const delta =
+              e.key === "ArrowRight" || e.key === "ArrowDown"
+                ? 1
+                : e.key === "ArrowLeft" || e.key === "ArrowUp"
+                  ? -1
+                  : 0;
+            if (delta === 0) return;
+            e.preventDefault();
+            const at = COLOR_MODES.findIndex((m) => m.id === colorMode);
+            const next = COLOR_MODES[(at + delta + COLOR_MODES.length) % COLOR_MODES.length];
+            onColorModeChange(next.id);
+          }}
         >
           {COLOR_MODES.map((m) => {
             const active = colorMode === m.id;
@@ -206,6 +222,8 @@ export default function ControlPanel({
                 type="button"
                 role="radio"
                 aria-checked={active}
+                // Roving tabindex: one stop for the group, not one per option.
+                tabIndex={active ? 0 : -1}
                 onClick={() => onColorModeChange(m.id)}
                 className={cn(
                   "h-6.5 flex-1 cursor-pointer rounded-md text-caption whitespace-nowrap transition-colors",

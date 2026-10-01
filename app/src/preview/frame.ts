@@ -34,13 +34,18 @@ export function frameToCanvas(frame: Frame): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = frame.width;
   canvas.height = frame.height;
-  canvas
-    .getContext("2d")!
-    .putImageData(
-      new ImageData(new Uint8ClampedArray(frame.pixels), frame.width, frame.height),
-      0,
-      0,
-    );
+  const context = canvas.getContext("2d");
+  // A canvas past the browser's size or area limit returns null here rather
+  // than throwing, so the null has to be turned into something the boundary
+  // above can show the user.
+  if (!context) {
+    throw new RangeError(`this browser cannot display a ${frame.width}×${frame.height} canvas`);
+  }
+  context.putImageData(
+    new ImageData(new Uint8ClampedArray(frame.pixels), frame.width, frame.height),
+    0,
+    0,
+  );
   return canvas;
 }
 

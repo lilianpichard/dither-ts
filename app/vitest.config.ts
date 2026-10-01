@@ -13,10 +13,13 @@ export default defineConfig({
       exclude: ["**/*.test.*", "**/*.spec.*", "**/dist/**", "**/coverage/**"],
       reporter: ["text", "lcov"],
       thresholds: {
-        branches: 5,
-        functions: 5,
-        lines: 10,
-        statements: 10,
+        // Set just under what the suites reach today, so a drop fails the build
+        // and adding tests lifts the floor. The previous 5/5/10/10 protected
+        // nothing: the app could lose two thirds of its coverage and stay green.
+        branches: 50,
+        functions: 45,
+        lines: 50,
+        statements: 50,
       },
     },
   },

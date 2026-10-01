@@ -11,6 +11,24 @@ export interface RenderStatus {
 
 export const RENDERING_TEXT = "Rendering…";
 
+/**
+ * What to tell the user about something that failed outside a render: a
+ * rejected promise, or an error event. An abort is not a failure, so it is
+ * reported as nothing at all.
+ */
+export function describeUncaught(reason: unknown): string {
+  if (isAbort(reason)) return "";
+  let message = "";
+  if (reason instanceof Error) message = reason.message;
+  else if (typeof reason === "string") message = reason;
+  return message ? `Unexpected error: ${message}` : "Unexpected error";
+}
+
+/** True for the cancellation this app raises, which is never worth reporting. */
+export function isAbort(reason: unknown): boolean {
+  return reason instanceof Error && reason.name === "AbortError";
+}
+
 /** One wording for the visible badge and the polite live region. */
 export function describeRenderStatus({
   hasSource,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeRenderStatus, RENDERING_TEXT } from "./status";
+import { describeRenderStatus, describeUncaught, isAbort, RENDERING_TEXT } from "./status";
 
 const idle = { hasSource: true, rendering: false, ms: null, previewScaled: false };
 
@@ -22,5 +22,27 @@ describe("render status", () => {
 
   it("falls back to ready for a non-finite time", () => {
     expect(describeRenderStatus({ ...idle, ms: Number.NaN })).toBe("Ready");
+  });
+});
+
+describe("uncaught failures", () => {
+  it("say what went wrong, without repeating the prefix", () => {
+    expect(describeUncaught(new Error("worker died"))).toBe("Unexpected error: worker died");
+    expect(describeUncaught("plain string")).toBe("Unexpected error: plain string");
+  });
+
+  it("still say something when the reason carries no detail", () => {
+    for (const reason of [undefined, null, "", {}]) {
+      expect(describeUncaught(reason)).toBe("Unexpected error");
+    }
+  });
+
+  it("stay quiet for a cancellation, which is not a failure", () => {
+    const abort = new Error("cancelled");
+    abort.name = "AbortError";
+    expect(isAbort(abort)).toBe(true);
+    expect(describeUncaught(abort)).toBe("");
+    expect(isAbort(new Error("real failure"))).toBe(false);
+    expect(isAbort("AbortError")).toBe(false);
   });
 });

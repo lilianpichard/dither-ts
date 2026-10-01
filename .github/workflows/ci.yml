@@ -5,6 +5,15 @@ on:
     branches: [main]
   pull_request:
 
+# Nothing here writes to the repository, so the token gets nothing to write with.
+permissions:
+  contents: read
+
+# A newer push to the same ref supersedes the older run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ci:
     runs-on: ubuntu-latest
@@ -12,8 +21,8 @@ jobs:
       matrix:
         node-version: [22.x, 24.x]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
@@ -24,19 +33,41 @@ jobs:
       - run: npm ci
       - run: npm ci --prefix app
       - run: npm ci --prefix electron
-      - run: npm run typecheck
+      - run: npm audit --audit-level=high
       - run: npm --prefix app run typecheck
+      - run: npm run typecheck
       - run: npm run test:all
       - run: npm run coverage:all
       - run: npm run lint
       - run: npm run format:check
       - run: npm run build:all
+      - name: The package a consumer would install
+        # Catches a broken entry point or a files list that drops dist, which
+        # is invisible until someone tries npm install dither-ts.
+        run: npm run pack:check
       - name: No absolute asset paths (Electron file:// compat)
         run: |
           if grep -Eq '(src|href)="/' app/dist/index.html; then
             echo "absolute asset path breaks file:// loading"; exit 1
           fi
-      # --no-sandbox: runners lack the SUID sandbox helper setup.
+
+  # Packaging is the slowest step and depends on nothing but one node version,
+  # so it runs once instead of once per version in the matrix.
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+            electron/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix app
+      - run: npm ci --prefix electron
       - run: npm --prefix electron exec -- electron --no-sandbox --version
       - name: Package and smoke the desktop app
         # electron-builder ships chrome-sandbox without the setuid bit, and

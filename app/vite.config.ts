@@ -41,6 +41,25 @@ export default defineConfig({
   // and file:// (Electron loadFile).
   base: "./",
   plugins: [react(), tailwindcss(), devCsp()],
+  build: {
+    // Split the framework out from the app code. The entry chunk is dominated by
+    // react-dom, and without this a dependency bump invalidates the whole file
+    // in every browser cache instead of one chunk.
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: "react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+            {
+              name: "radix",
+              test: /node_modules[\\/](@radix-ui|@floating-ui|react-remove-scroll|dismissable-layer)[\\/]/,
+            },
+            { name: "ui", test: /node_modules[\\/](sonner|next-themes|cn|lucide-react)[\\/]/ },
+          ],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

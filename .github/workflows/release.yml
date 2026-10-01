@@ -1,0 +1,101 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to build and publish, for example v0.1.0
+        required: true
+
+# The publish path is the only job here that writes anything.
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # One matrix entry per platform, because signing material does not cross over:
+  # a macOS certificate has no meaning on a Windows runner.
+  desktop:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-latest
+            target: AppImage deb
+          - platform: macos
+            os: macos-latest
+            target: dmg zip
+          - platform: windows
+            os: windows-latest
+            target: nsis
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.x
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            app/package-lock.json
+            electron/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix app
+      - run: npm ci --prefix electron
+      - name: Build the app bundle
+        run: npm --prefix app run build
+      - name: Build the desktop artifacts
+        # Untagged, so electron-builder does not try to cut a git tag here. The
+        # release job below publishes it, and the tag is already the trigger.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signing material. Each is optional: an unsigned build still gets
+          # produced, and the release notes say so, so a first release is not
+          # blocked on having all of them.
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          CSC_NAME: ${{ secrets.MAC_CSC_NAME }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: npx --prefix electron electron-builder --${{ matrix.platform }} ${{ matrix.target }} --publish never
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dither-ts-${{ matrix.platform }}
+          path: electron/release/*
+          if-no-files-found: error
+          retention-days: 7
+
+  # Everything lands in one release, so the update feed and the download links
+  # are created by a single job rather than three racing ones.
+  publish:
+    needs: desktop
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: dither-ts-*
+          merge-multiple: true
+          path: artifacts
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          # latest*.yml is the updater feed. It has to travel with the
+          # artifacts or every installed app reports "up to date" forever.
+          gh release create "$TAG" artifacts/* \
+            --title "dither-ts $TAG" \
+            --generate-notes \
+            --verify-tag

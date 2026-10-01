@@ -1,0 +1,42 @@
+version: 2
+updates:
+  # The kernel has no runtime dependencies; the app and the shell do.
+  - package-ecosystem: npm
+    directory: /app
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # A react or vite bump is one review, not four.
+      frontend:
+        patterns: ["react", "react-dom", "vite", "vitest", "tailwindcss", "@tailwindcss/*"]
+    commit-message:
+      prefix: "chore(app)"
+
+  - package-ecosystem: npm
+    directory: /electron
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Electron and electron-builder move together and break together.
+      electron:
+        patterns: ["electron", "electron-builder", "electron-updater"]
+    commit-message:
+      prefix: "chore(desktop)"
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "chore(toolchain)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"

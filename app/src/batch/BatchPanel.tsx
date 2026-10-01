@@ -88,7 +88,8 @@ export default function BatchPanel() {
           const canvas = document.createElement("canvas");
           canvas.width = bitmap.width;
           canvas.height = bitmap.height;
-          const context = canvas.getContext("2d")!;
+          const context = canvas.getContext("2d");
+          if (!context) throw new Error("this browser would not give the app a 2d context");
           context.drawImage(bitmap, 0, 0);
           const data = context.getImageData(0, 0, bitmap.width, bitmap.height);
           const copy = new Uint8ClampedArray(data.data).buffer as ArrayBuffer;
@@ -115,13 +116,13 @@ export default function BatchPanel() {
           const out = document.createElement("canvas");
           out.width = res.width;
           out.height = res.height;
-          out
-            .getContext("2d")!
-            .putImageData(
-              new ImageData(new Uint8ClampedArray(res.pixels), res.width, res.height),
-              0,
-              0,
-            );
+          const outCtx = out.getContext("2d");
+          if (!outCtx) throw new Error("this browser would not give the app a 2d context");
+          outCtx.putImageData(
+            new ImageData(new Uint8ClampedArray(res.pixels), res.width, res.height),
+            0,
+            0,
+          );
           const blob = await new Promise<Blob | null>((resolve) =>
             out.toBlob(resolve, "image/png"),
           );

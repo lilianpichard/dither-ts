@@ -14,6 +14,7 @@ import { AnalyzingImage } from "./components/AnalyzingImage";
 import { PanelResizer } from "./components/PanelResizer";
 import { usePanelSize } from "./lib/panelSize";
 import { SLOW_OPERATION_MS, warnIfSlow } from "./lib/slowOperation";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -29,6 +30,10 @@ const RAIL_MIN = 176;
 const CONSOLE_MIN = 120;
 const RAIL_DEFAULT = 256;
 const CONSOLE_DEFAULT = 300;
+// Long enough that no legitimate render reaches it: the slow warning already
+// covers a render that is merely big. This only catches a worker that stopped
+// answering, which would otherwise leave the overlay up forever.
+const PREVIEW_TIMEOUT_MS = 180_000;
 let jobSeq = 0;
 
 async function fileToSource(file: File) {
@@ -37,7 +42,8 @@ async function fileToSource(file: File) {
     const canvas = document.createElement("canvas");
     canvas.width = bitmap.width;
     canvas.height = bitmap.height;
-    const context = canvas.getContext("2d")!;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("this browser would not give the app a 2d context");
     context.drawImage(bitmap, 0, 0);
     const data = context.getImageData(0, 0, bitmap.width, bitmap.height);
     const copy = new Uint8ClampedArray(data.data);
@@ -140,14 +146,16 @@ export default function App() {
           const full = document.createElement("canvas");
           full.width = width;
           full.height = height;
-          full
-            .getContext("2d")!
-            .putImageData(new ImageData(new Uint8ClampedArray(pixels), width, height), 0, 0);
+          const fullCtx = full.getContext("2d");
+          if (!fullCtx) throw new Error("this browser would not give the app a 2d context");
+          fullCtx.putImageData(new ImageData(new Uint8ClampedArray(pixels), width, height), 0, 0);
           const small = document.createElement("canvas");
           small.width = size.width;
           small.height = size.height;
-          small.getContext("2d")!.drawImage(full, 0, 0, size.width, size.height);
-          const data = small.getContext("2d")!.getImageData(0, 0, size.width, size.height);
+          const smallCtx = small.getContext("2d");
+          if (!smallCtx) throw new Error("this browser would not give the app a 2d context");
+          smallCtx.drawImage(full, 0, 0, size.width, size.height);
+          const data = smallCtx.getImageData(0, 0, size.width, size.height);
           // Crop lives in source pixels, so it follows the preview downscale.
           frameOperations = scaleOperations(operations, size.width / width);
           width = size.width;
@@ -190,7 +198,7 @@ export default function App() {
               partial: true,
             });
           },
-          { signal: controller.signal, scope: APP_RENDER_SCOPE },
+          { signal: controller.signal, scope: APP_RENDER_SCOPE, timeout: PREVIEW_TIMEOUT_MS },
         );
         if (controller.signal.aborted || renderAbort.current !== controller || jobId !== jobSeq) {
           return;
@@ -285,13 +293,27 @@ export default function App() {
           <section className="relative flex min-h-32 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-canvas">
             {source || video ? (
               <>
-                <PreviewSurface
-                  display={video ? video.display : shown}
-                  compare={video ? video.compare : source}
-                  geometry={video ? video.geometry : source}
-                  resetKey={video ? video.clipKey : source}
-                  label={video ? "Dithered video frame preview" : "Dithered image preview"}
-                />
+                {/* A frame too big to paint is one bad source, not a dead app. */}
+                <ErrorBoundary
+                  fallback={(message, retry) => (
+                    <div role="alert" className="flex h-full items-center justify-center p-4">
+                      <div className="max-w-sm text-center">
+                        <p className="text-label text-destructive">{message}</p>
+                        <button type="button" onClick={retry} className="mt-2 text-label underline">
+                          Try again
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                >
+                  <PreviewSurface
+                    display={video ? video.display : shown}
+                    compare={video ? video.compare : source}
+                    geometry={video ? video.geometry : source}
+                    resetKey={video ? video.clipKey : source}
+                    label={video ? "Dithered video frame preview" : "Dithered image preview"}
+                  />
+                </ErrorBoundary>
                 {meta ? (
                   <p className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-label text-muted-foreground">
                     {meta.width}×{meta.height} · {params.method.toUpperCase()} · {params.threshold}{" "}
