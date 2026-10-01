@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "ignorePatterns": ["dist/", "coverage/"],
+  "ignorePatterns": ["dist/", "dist-test/", "coverage/"],
   "jsPlugins": ["@shadcn/lint"],
   "settings": {
     "shadcn": {
@@ -14,7 +14,10 @@
   "overrides": [
     {
       "files": ["app/src/components/ui/**"],
-      "rules": { "shadcn/no-arbitrary-values": "off", "shadcn/no-unknown-classes": "off" }
+      "rules": {
+        "shadcn/no-arbitrary-values": "off",
+        "shadcn/no-unknown-classes": "off"
+      }
     }
   ]
 }
