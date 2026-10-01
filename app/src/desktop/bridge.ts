@@ -44,12 +44,30 @@ export interface DirectoryResult {
   handle: string | null;
 }
 
+/** Where an update check got to, as the shell reports it. */
+export type UpdateState =
+  | { state: "checking" }
+  | { state: "available" | "current" | "ready"; version: string | null }
+  | { state: "downloading"; percent: number; transferred: number; total: number }
+  | { state: "failed"; message: string };
+
+/** The answer to one update check. */
+export interface UpdateCheckResult {
+  ok: boolean;
+  version: string | null;
+  message?: string;
+}
+
 /** The exposed bridge, in the shape the renderer is allowed to call. */
 export interface DesktopBridge {
   versions: DesktopVersions;
   open(request: OpenRequest): Promise<OpenResult>;
   pickDirectory(): Promise<DirectoryResult>;
   save(request: SaveRequest): Promise<SaveResult>;
+  /** Only on the packaged shell: a dev run has no update feed. */
+  checkUpdate?(): Promise<UpdateCheckResult>;
+  /** Only on the packaged shell: progress between check and install. */
+  onUpdate?(listener: (status: UpdateState) => void): () => void;
 }
 
 declare global {
@@ -79,4 +97,31 @@ export function desktopBridge(): DesktopBridge | null {
 /** True when native file dialogs are available, so inputs can be replaced. */
 export function canOpenFiles(): boolean {
   return desktopBridge() !== null;
+}
+
+/**
+ * Ask for an update check, if the shell can do one. A dev run exposes no
+ * update feed at all, so this answers with `null` rather than throwing and the
+ * caller hides the control.
+ */
+export async function checkForUpdate(): Promise<UpdateCheckResult | null> {
+  const bridge = desktopBridge();
+  if (!bridge || typeof bridge.checkUpdate !== "function") return null;
+  return bridge.checkUpdate();
+}
+
+/**
+ * Subscribe to update progress. The returned function unsubscribes; a shell
+ * with no feed yields a no-op so the caller needs no branch.
+ */
+export function onUpdateStatus(listener: (status: UpdateState) => void): () => void {
+  const bridge = desktopBridge();
+  if (!bridge || typeof bridge.onUpdate !== "function") return () => {};
+  return bridge.onUpdate(listener);
+}
+
+/** True when the packaged shell has an update feed. A dev run does not. */
+export function canUpdate(): boolean {
+  const bridge = desktopBridge();
+  return bridge !== null && typeof bridge.checkUpdate === "function";
 }

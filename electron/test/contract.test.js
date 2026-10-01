@@ -8,7 +8,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { test, describe, before, after } = require("node:test");
 
-const { CHANNELS, parseOpenRequest, parseSaveRequest, MAX_SAVE_BYTES } = require("../lib/contract");
+const {
+  CHANNELS,
+  UPDATE_CHANNEL,
+  UPDATE_EVENT_CHANNEL,
+  parseOpenRequest,
+  parseSaveRequest,
+  MAX_SAVE_BYTES,
+} = require("../lib/contract");
 const {
   CONTENT_SECURITY_POLICY,
   DOCUMENT_SECURITY_POLICY,
@@ -25,6 +32,7 @@ const ELECTRON_PATH = require.resolve("electron");
 function loadPreload() {
   const exposed = [];
   const invoked = [];
+  const subscriptions = [];
   require.cache[ELECTRON_PATH] = {
     id: ELECTRON_PATH,
     filename: ELECTRON_PATH,
@@ -38,6 +46,13 @@ function loadPreload() {
           invoked.push({ channel, payload });
           return { channel, payload };
         },
+        on: (channel, handler) => {
+          subscriptions.push({ channel, handler });
+        },
+        removeListener: (channel, handler) => {
+          const at = subscriptions.findIndex((s) => s.channel === channel && s.handler === handler);
+          if (at >= 0) subscriptions.splice(at, 1);
+        },
       },
     },
   };
@@ -49,7 +64,7 @@ function loadPreload() {
     delete require.cache[preload];
     delete require.cache[ELECTRON_PATH];
   }
-  return { exposed, invoked };
+  return { exposed, invoked, subscriptions };
 }
 
 /** The policy the app document itself carries, read back out of index.html. */
@@ -91,14 +106,23 @@ function directive(policy, name) {
 }
 
 describe("channel surface", () => {
-  test("is three namespaced channels and nothing else", () => {
+  test("is three namespaced file channels and nothing else", () => {
     assert.deepEqual(Object.keys(CHANNELS).sort(), ["open", "pickDirectory", "save"]);
     const names = Object.values(CHANNELS);
     assert.equal(new Set(names).size, names.length);
     for (const name of names) assert.match(name, /^dither:[a-z][a-z-]*$/);
   });
 
-  test("registers exactly those channels on ipcMain", () => {
+  test("the update pair is namespaced and distinct from the file channels", () => {
+    for (const name of [UPDATE_CHANNEL, UPDATE_EVENT_CHANNEL]) {
+      assert.match(name, /^dither:[a-z][a-z-]*$/);
+    }
+    assert.notEqual(UPDATE_CHANNEL, UPDATE_EVENT_CHANNEL);
+    assert.ok(!Object.values(CHANNELS).includes(UPDATE_CHANNEL));
+    assert.ok(!Object.values(CHANNELS).includes(UPDATE_EVENT_CHANNEL));
+  });
+
+  test("registers exactly the file channels on ipcMain", () => {
     const registered = new Map();
     const bridge = createBridge({ dialog: {}, getWindow: () => null, homeDir: "/tmp" });
     bridge.register({ handle: (channel, handler) => registered.set(channel, handler) });
@@ -123,8 +147,10 @@ describe("preload", () => {
     assert.equal(loaded.exposed[0].key, "ditherDesktop");
   });
 
-  test("exposes versions and the three calls, and nothing else", () => {
+  test("exposes versions, the three file calls, the update pair, and nothing else", () => {
     assert.deepEqual(Object.keys(loaded.exposed[0].api).sort(), [
+      "checkUpdate",
+      "onUpdate",
       "open",
       "pickDirectory",
       "save",
@@ -139,7 +165,16 @@ describe("preload", () => {
 
   test("hands out no way to reach ipcRenderer or the filesystem", () => {
     const api = loaded.exposed[0].api;
-    for (const forbidden of ["ipcRenderer", "require", "process", "send", "on", "once", "invoke"]) {
+    for (const forbidden of [
+      "ipcRenderer",
+      "require",
+      "process",
+      "send",
+      "on",
+      "once",
+      "invoke",
+      "removeListener",
+    ]) {
       assert.equal(api[forbidden], undefined, `${forbidden} must not be exposed`);
     }
     const objects = Object.entries(api).filter(([, value]) => typeof value === "object");
@@ -155,14 +190,30 @@ describe("preload", () => {
     const open = await api.open({ kind: "image" });
     const directory = await api.pickDirectory();
     const save = await api.save({ name: "a.png", bytes: new Uint8Array([1]) });
+    const update = await api.checkUpdate();
     assert.deepEqual(
       loaded.invoked.map((call) => call.channel),
-      [CHANNELS.open, CHANNELS.pickDirectory, CHANNELS.save],
+      [CHANNELS.open, CHANNELS.pickDirectory, CHANNELS.save, UPDATE_CHANNEL],
     );
     assert.deepEqual(
-      [open.channel, directory.channel, save.channel],
-      [CHANNELS.open, CHANNELS.pickDirectory, CHANNELS.save],
+      [open.channel, directory.channel, save.channel, update.channel],
+      [CHANNELS.open, CHANNELS.pickDirectory, CHANNELS.save, UPDATE_CHANNEL],
     );
+  });
+
+  test("subscribes to update status only, and unsubscribes on request", () => {
+    const api = loaded.exposed[0].api;
+    loaded.subscriptions.length = 0;
+    const seen = [];
+    const stop = api.onUpdate((status) => seen.push(status));
+    assert.equal(loaded.subscriptions.length, 1);
+    assert.equal(loaded.subscriptions[0].channel, UPDATE_EVENT_CHANNEL);
+    // The raw ipc event must not reach the renderer.
+    loaded.subscriptions[0].handler({ senderId: "secret" }, { state: "ready", version: "1.2.0" });
+    assert.deepEqual(seen, [{ state: "ready", version: "1.2.0" }]);
+    assert.equal(typeof stop, "function");
+    stop();
+    assert.equal(loaded.subscriptions.length, 0);
   });
 
   test("reports the real runtime versions", () => {
@@ -301,6 +352,72 @@ describe("release hardening", () => {
   test("gives the packaged binary one predictable name", () => {
     // The smoke check locates the executable by name, on every platform.
     assert.equal(build.executableName, "dither-ts");
+  });
+
+  test("names a release provider, so the updater has a feed to read", () => {
+    const providers = Array.isArray(build.publish) ? build.publish : [build.publish];
+    assert.equal(providers.length, 1);
+    const [provider] = providers;
+    assert.equal(provider.provider, "github");
+    assert.equal(provider.owner, "lilianpichard");
+    assert.equal(provider.repo, "dither-ts");
+    assert.equal(provider.releaseType, "release");
+  });
+
+  test("ships an icon on every platform rather than the electron default", () => {
+    assert.equal(build.icon, "build/icon.png");
+    assert.equal(build.mac.icon, "build/icon.png");
+    assert.equal(build.win.icon, "build/icon.png");
+    assert.equal(build.linux.icon, "build/icons");
+    // electron-builder cannot cut an .ico or an .icns without a real source,
+    // so the one icon file has to exist and be big enough to downscale from.
+    const icon = path.join(__dirname, "..", build.icon);
+    assert.ok(fs.existsSync(icon), "icon.png is missing");
+    const bytes = fs.readFileSync(icon);
+    // PNG signature plus the IHDR width and height, both big-endian.
+    assert.equal(bytes.subarray(1, 4).toString("ascii"), "PNG");
+    assert.equal(bytes.readUInt32BE(16), 1024);
+    assert.equal(bytes.readUInt32BE(20), 1024);
+  });
+
+  test("signs and notarizes on macos, which gatekeeper requires", () => {
+    // Without the hardened runtime notarization is refused outright.
+    assert.equal(build.mac.hardenedRuntime, true);
+    assert.equal(build.mac.notarize, true);
+    for (const entitlements of [build.mac.entitlements, build.mac.entitlementsInherit]) {
+      assert.ok(fs.existsSync(path.join(__dirname, "..", entitlements)), `${entitlements} missing`);
+    }
+  });
+
+  test("names the windows publisher and a timestamp server", () => {
+    // Without a publisher the smart screen warning names nobody, and without
+    // a timestamp the signature stops validating once the certificate expires.
+    assert.equal(build.win.signtoolOptions.publisherName, "Lilian Pichard");
+    assert.ok(build.win.signtoolOptions.timeStampServer);
+    assert.deepEqual(build.win.target, ["nsis"]);
+  });
+
+  test("offers linux a package-manager artifact, not only an appimage", () => {
+    assert.ok(build.linux.target.includes("AppImage"));
+    assert.ok(build.linux.target.includes("deb"));
+    assert.ok(build.linux.maintainer);
+    assert.ok(build.linux.desktop.entry.MimeType.includes("image/png"));
+    // Every size electron-builder looks for has to be on disk.
+    for (const size of [16, 32, 48, 64, 128, 256, 512]) {
+      const entry = path.join(__dirname, "..", build.linux.icon, `${size}x${size}.png`);
+      assert.ok(fs.existsSync(entry), `${size}x${size} icon is missing`);
+    }
+  });
+
+  test("tags the version in the artifact name, so a release cannot overwrite", () => {
+    assert.match(build.artifactName, /\$\{version\}/);
+    assert.match(build.artifactName, /\$\{arch\}/);
+  });
+
+  test("keeps the copyright and the author with the package", () => {
+    assert.match(build.copyright, /Lilian Pichard/);
+    assert.equal(build.extraMetadata.author, "Lilian Pichard");
+    assert.match(build.extraMetadata.homepage, /^https:\/\//);
   });
 
   test("flips every electron fuse to its hardened value", () => {

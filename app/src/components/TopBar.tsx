@@ -1,6 +1,7 @@
 import { Redo2, Undo2 } from "lucide-react";
 import { useApp } from "../store";
 import { ThemeToggle } from "./ThemeToggle";
+import { UpdateCheck } from "./UpdateCheck";
 import { Kbd } from "@/components/ui/kbd";
 import { TOOL_COUNT } from "./ToolsPanel";
 import logo from "dither-ts/assets/dither_logo.webp";
@@ -36,6 +37,7 @@ export function TopBar() {
         <HistoryButton label="Redo" hint="Ctrl+Shift+Z" disabled={!canRedo} onClick={redo}>
           <Redo2 />
         </HistoryButton>
+        <UpdateCheck />
         <ThemeToggle />
       </div>
     </header>

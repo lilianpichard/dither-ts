@@ -70,7 +70,7 @@ async function findPage(port, child) {
 }
 
 /** Ask the renderer one question and hand back the answer. */
-function ask(socket, id, expression) {
+function ask(socket, id, expression, awaitPromise = false) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`timed out asking: ${expression}`)), 10_000);
     const onMessage = (event) => {
@@ -82,7 +82,13 @@ function ask(socket, id, expression) {
       else resolve(message.result.result.value);
     };
     socket.addEventListener("message", onMessage);
-    socket.send(JSON.stringify({ id, method: "Runtime.evaluate", params: { expression } }));
+    socket.send(
+      JSON.stringify({
+        id,
+        method: "Runtime.evaluate",
+        params: { expression, awaitPromise },
+      }),
+    );
   });
 }
 
@@ -92,7 +98,7 @@ const CHECKS = [
   ["the app document is the one that was loaded", "location.pathname.endsWith('index.html')"],
   [
     "the bridge is exposed",
-    "JSON.stringify(Object.keys(window.ditherDesktop || {}).sort()) === JSON.stringify(['open','pickDirectory','save','versions'])",
+    "JSON.stringify(Object.keys(window.ditherDesktop || {}).sort()) === JSON.stringify(['checkUpdate','onUpdate','open','pickDirectory','save','versions'])",
   ],
   [
     "the renderer has no node",
@@ -106,6 +112,44 @@ const CHECKS = [
     "Boolean(document.querySelector('meta[http-equiv=\"Content-Security-Policy\"]'))",
   ],
 ];
+
+/**
+ * A module worker on file:// is the one thing the unit tests cannot prove: the
+ * worker chunk is only fetched when a render starts, and chromium gives an
+ * opaque origin to file:. It is the difference between an app that opens and an
+ * app that works, so the smoke does one real render through one real worker.
+ */
+function workerCheck(workerFile) {
+  return `(async () => {
+    const worker = new Worker(new URL(${JSON.stringify(workerFile)}, location.href), { type: "module" });
+    const pixels = new Uint8ClampedArray([0, 0, 255, 255, 255, 255, 255, 255]);
+    try {
+      const reply = await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error("no answer from the render worker")), 15000);
+        worker.onmessage = (event) => { clearTimeout(timer); resolve(event.data); };
+        worker.onerror = (event) => { clearTimeout(timer); reject(new Error(event.message || "worker error")); };
+        worker.postMessage({
+          id: 1, width: 2, height: 1, pixels: pixels.buffer, color: true,
+          colorMode: "original", method: "Atkinson", palette: "B&W", threshold: 128,
+          pixelSize: 1, effects: [], seed: 0, progressEvery: 0
+        }, [pixels.buffer]);
+      });
+      if (reply.kind !== "result") return false;
+      const out = new Uint8ClampedArray(reply.pixels);
+      if (reply.width !== 2 || reply.height !== 1 || out.length !== 8) return false;
+      return out[3] === 255 && out[7] === 255;
+    } finally {
+      worker.terminate();
+    }
+  })()`;
+}
+
+/** The render worker chunk vite emitted next to the document, if it is there. */
+function findWorker() {
+  const assets = path.join(ROOT, "dist", "assets");
+  const found = fs.readdirSync(assets).find((entry) => /^render-[A-Za-z0-9_-]+\.js$/.test(entry));
+  return found ? `./assets/${found}` : null;
+}
 
 async function main() {
   const binary = locateBinary();
@@ -167,9 +211,21 @@ async function main() {
         once: true,
       });
     });
+    const worker = findWorker();
+    if (worker) {
+      CHECKS.push([
+        "a render worker boots under file: and returns pixels",
+        workerCheck(worker),
+        false,
+        true,
+      ]);
+    } else {
+      failures += 1;
+      console.error("smoke: FAILED no render worker chunk next to the document");
+    }
     let id = 0;
-    for (const [label, expression, settle] of CHECKS) {
-      let value = await ask(socket, ++id, expression);
+    for (const [label, expression, settle, awaitPromise] of CHECKS) {
+      let value = await ask(socket, ++id, expression, awaitPromise);
       // A check the app has not got round to yet is not a failure.
       const deadline = Date.now() + (settle ? BOOT_TIMEOUT_MS : 0);
       while (value !== true && settle && Date.now() < deadline) {

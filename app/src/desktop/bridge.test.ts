@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { canOpenFiles, desktopBridge, type DesktopBridge } from "./bridge";
+import {
+  canOpenFiles,
+  checkForUpdate,
+  desktopBridge,
+  onUpdateStatus,
+  type DesktopBridge,
+} from "./bridge";
 
 /** A bridge that records what the app asked the shell to do. */
 function stubBridge(overrides: Partial<DesktopBridge> = {}): DesktopBridge {
@@ -53,5 +59,39 @@ describe("desktopBridge", () => {
       expose(partial);
       expect(desktopBridge()).toBeNull();
     }
+  });
+});
+
+describe("updates", () => {
+  it("are absent in a plain browser, without throwing", async () => {
+    expose(stubBridge());
+    await expect(checkForUpdate()).resolves.toBeNull();
+    expect(() => onUpdateStatus(() => {})()).not.toThrow();
+  });
+
+  it("ask the shell when it offers a feed", async () => {
+    const bridge = stubBridge({
+      checkUpdate: vi.fn(async () => ({ ok: true, version: "1.2.0" })),
+    });
+    expose(bridge);
+    await expect(checkForUpdate()).resolves.toEqual({ ok: true, version: "1.2.0" });
+    expect(bridge.checkUpdate).toHaveBeenCalledOnce();
+  });
+
+  it("subscribe and unsubscribe through the shell", () => {
+    const listener = vi.fn();
+    const stop = vi.fn();
+    const bridge = stubBridge({ onUpdate: vi.fn(() => stop) });
+    expose(bridge);
+    const unsubscribe = onUpdateStatus(listener);
+    expect(bridge.onUpdate).toHaveBeenCalledWith(listener);
+    unsubscribe();
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it("treat a non-callable feed as no feed at all", async () => {
+    expose(stubBridge({ checkUpdate: 1 as never, onUpdate: "no" as never }));
+    await expect(checkForUpdate()).resolves.toBeNull();
+    expect(() => onUpdateStatus(() => {})()).not.toThrow();
   });
 });

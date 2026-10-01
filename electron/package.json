@@ -3,26 +3,41 @@
   "version": "0.1.0",
   "private": true,
   "description": "Electron shell for the dither-ts app",
-  "author": "dither-ts contributors",
+  "author": "Lilian Pichard",
   "main": "main.js",
   "scripts": {
     "dev": "npm --prefix ../app run build && npm run sync-app && electron .",
     "sync-app": "node -e \"const fs=require('node:fs');fs.rmSync('./dist',{recursive:true,force:true});fs.cpSync('../app/dist','./dist',{recursive:true})\"",
     "dist": "npm --prefix ../app run build && npm run sync-app && electron-builder",
     "dist-dir": "npm --prefix ../app run build && npm run sync-app && electron-builder --dir",
+    "dist:linux": "npm run dist -- --linux AppImage deb",
+    "dist:mac": "npm run dist -- --mac dmg",
+    "dist:win": "npm run dist -- --win nsis",
     "smoke": "npm run dist-dir && node scripts/smoke.js",
     "test": "node --test test/*.test.js"
   },
   "license": "GPL-3.0-only",
   "devDependencies": {
     "electron": "^44.4.5",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "electron-updater": "^6.8.1"
   },
   "build": {
     "appId": "com.dither-ts.desktop",
     "productName": "dither-ts",
     "executableName": "dither-ts",
     "asar": true,
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "icon": "build/icon.png",
+    "copyright": "Copyright (C) 2026 Lilian Pichard",
+    "extraMetadata": {
+      "author": "Lilian Pichard",
+      "homepage": "https://github.com/lilianpichard/dither-ts",
+      "repository": {
+        "type": "git",
+        "url": "git+https://github.com/lilianpichard/dither-ts.git"
+      }
+    },
     "files": [
       "main.js",
       "preload.js",
@@ -40,27 +55,72 @@
       "grantFileProtocolExtraPrivileges": true
     },
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "lilianpichard",
+        "repo": "dither-ts",
+        "releaseType": "release"
+      }
+    ],
+    "generateUpdatesFilesForAllChannels": false,
     "linux": {
       "target": [
         "AppImage",
-        "dir"
+        "deb"
       ],
-      "category": "Graphics"
+      "category": "Graphics",
+      "icon": "build/icons",
+      "maintainer": "Lilian Pichard",
+      "synopsis": "Dither images and video with 24 algorithms",
+      "description": "Dither images and video with 24 algorithms, 11 palettes and a stackable effects pipeline. Runs entirely offline.",
+      "desktop": {
+        "entry": {
+          "Name": "dither-ts",
+          "Comment": "Dither images and video",
+          "Categories": "Graphics;2DGraphics;RasterGraphics;",
+          "MimeType": "image/png;image/jpeg;image/webp;image/gif;video/mp4;video/webm;"
+        }
+      }
     },
     "mac": {
       "target": [
         "dmg",
-        "dir"
+        "zip"
       ],
-      "category": "public.app-category.graphics-design"
+      "category": "public.app-category.graphics-design",
+      "icon": "build/icon.png",
+      "darkModeSupport": true,
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "notarize": true,
+      "extendInfo": {
+        "NSHumanReadableCopyright": "Copyright (C) 2026 Lilian Pichard. GPL-3.0-only."
+      }
     },
     "win": {
       "target": [
-        "nsis",
-        "dir"
-      ]
+        "nsis"
+      ],
+      "icon": "build/icon.png",
+      "signtoolOptions": {
+        "publisherName": "Lilian Pichard",
+        "timeStampServer": "http://timestamp.digicert.com",
+        "rfc3161TimeStampServer": "http://timestamp.digicert.com"
+      }
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "dither-ts"
     }
   }
 }

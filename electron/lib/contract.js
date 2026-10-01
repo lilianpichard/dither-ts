@@ -1,12 +1,19 @@
-// The whole renderer-facing surface: three channels and the shape of what may
-// cross them. Deliberately free of electron imports so the contract can be read
-// and tested on its own, and so the preload can mirror it without a build step.
+// The whole renderer-facing surface: the file channels and the shape of what
+// may cross them, plus the update channel. Deliberately free of electron
+// imports so the contract can be read and tested on its own, and so the preload
+// can mirror it without a build step.
 
 const CHANNELS = Object.freeze({
   open: "dither:open",
   pickDirectory: "dither:pick-directory",
   save: "dither:save",
 });
+
+/** The renderer asks for an update check here; status arrives on EVENT_CHANNEL. */
+const UPDATE_CHANNEL = "dither:update";
+
+/** The one push channel: the main process sending update status down. */
+const UPDATE_EVENT_CHANNEL = "dither:update-event";
 
 /** What the renderer is allowed to ask the open dialog for. */
 const OPEN_KINDS = Object.freeze(["image", "video"]);
@@ -70,6 +77,8 @@ function parseSaveRequest(raw) {
 
 module.exports = {
   CHANNELS,
+  UPDATE_CHANNEL,
+  UPDATE_EVENT_CHANNEL,
   OPEN_KINDS,
   MAX_SAVE_BYTES,
   OPEN_LIMITS,

@@ -11,6 +11,10 @@ yarn-error.log*
 dist/
 dist-test/
 build/
+# electron-builder reads icons and entitlements from electron/build, so those
+# files are source, not build output.
+!electron/build/
+!electron/build/**
 *.tsbuildinfo
 *.js.map
 *.d.ts.map
