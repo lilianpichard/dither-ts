@@ -1,6 +1,7 @@
 // Auto-update wiring. electron-updater is injected so the policy can be
-// asserted without a network or a signed build, and so an unpackaged dev run
-// simply reports that updates are unavailable instead of throwing.
+// asserted without a network or a signed build. A build with no feed behind it
+// still registers the channel and answers, because a channel nobody handles is
+// what makes the renderer show an ipc error instead of a sentence.
 
 const { UPDATE_CHANNEL, UPDATE_EVENT_CHANNEL } = require("./contract");
 
@@ -11,6 +12,9 @@ const DEFAULT_POLICY = Object.freeze({
   autoInstallOnAppQuit: true,
   allowDowngrade: false,
 });
+
+/** What a build with no feed behind it says when asked. */
+const NO_FEED = "Updates only run in a packaged build.";
 
 /** Map an updater event to the small shape the renderer renders. */
 function toStatus(event, info) {
@@ -40,17 +44,17 @@ function describeError(error) {
   return { state: "failed", message };
 }
 
-function createUpdater({ autoUpdater, app, ipcMain, getWindow, policy }) {
-  if (!autoUpdater) throw new TypeError("updater: electron-updater is required");
+/**
+ * @param autoUpdater electron-updater's autoUpdater, or null when there is no
+ *   feed to read. Either way the channel is registered.
+ */
+function createUpdater({ autoUpdater, app, ipcMain, getWindow, policy, reason }) {
   const rules = { ...DEFAULT_POLICY, ...policy };
-
-  autoUpdater.autoDownload = rules.autoDownload;
-  autoUpdater.autoInstallOnAppQuit = rules.autoInstallOnAppQuit;
-  autoUpdater.allowDowngrade = rules.allowDowngrade;
+  const blocked = autoUpdater ? null : (reason ?? NO_FEED);
 
   // An unpackaged run has no app-update.yml, so every check fails with a
   // message nobody can act on. Report it once instead of on every launch.
-  let unavailable = null;
+  let reported = null;
 
   function publish(status) {
     if (!status) return;
@@ -58,20 +62,25 @@ function createUpdater({ autoUpdater, app, ipcMain, getWindow, policy }) {
     win?.webContents?.send(UPDATE_EVENT_CHANNEL, status);
   }
 
-  for (const event of [
-    "checking-for-update",
-    "update-available",
-    "update-not-available",
-    "download-progress",
-    "update-downloaded",
-  ]) {
-    autoUpdater.on(event, (info) => publish(toStatus(event, info)));
+  if (autoUpdater) {
+    autoUpdater.autoDownload = rules.autoDownload;
+    autoUpdater.autoInstallOnAppQuit = rules.autoInstallOnAppQuit;
+    autoUpdater.allowDowngrade = rules.allowDowngrade;
+    for (const event of [
+      "checking-for-update",
+      "update-available",
+      "update-not-available",
+      "download-progress",
+      "update-downloaded",
+    ]) {
+      autoUpdater.on(event, (info) => publish(toStatus(event, info)));
+    }
+    autoUpdater.on("error", (error) => {
+      if (reported) return;
+      reported = describeError(error);
+      publish(reported);
+    });
   }
-  autoUpdater.on("error", (error) => {
-    if (unavailable) return;
-    unavailable = describeError(error);
-    publish(unavailable);
-  });
 
   async function check(event) {
     const win = typeof getWindow === "function" ? getWindow() : null;
@@ -79,6 +88,7 @@ function createUpdater({ autoUpdater, app, ipcMain, getWindow, policy }) {
     if (!win || !event || event.sender !== win.webContents) {
       throw new Error("updater: refusing a request from an unknown window");
     }
+    if (blocked) return { ok: false, version: null, message: blocked };
     publish({ state: "checking" });
     try {
       const result = await autoUpdater.checkForUpdates();
@@ -102,4 +112,4 @@ function createUpdater({ autoUpdater, app, ipcMain, getWindow, policy }) {
   };
 }
 
-module.exports = { DEFAULT_POLICY, createUpdater, toStatus };
+module.exports = { DEFAULT_POLICY, NO_FEED, createUpdater, toStatus };

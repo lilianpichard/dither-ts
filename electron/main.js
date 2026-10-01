@@ -36,18 +36,27 @@ function createWindow() {
 
 /**
  * electron-updater only works on a packaged, signed build. A dev run has no
- * app-update.yml, so requiring it there would make the app unstartable; the
- * renderer is told updates are unavailable instead.
+ * app-update.yml, so it gets the channel with an answer that says so. The
+ * channel is registered either way: the preload exposes checkUpdate whatever
+ * the build is, and calling a channel with no handler comes back as an ipc
+ * error the renderer can only show raw.
  */
 function updaterFor() {
-  if (!app.isPackaged) return null;
+  if (!app.isPackaged) {
+    return createUpdater({ autoUpdater: null, app, getWindow: activeWindow }).register(ipcMain);
+  }
   try {
     // eslint-disable-next-line global-require
     const { autoUpdater } = require("electron-updater");
     return createUpdater({ autoUpdater, app, getWindow: activeWindow }).register(ipcMain);
   } catch (error) {
     console.warn(`[updater] unavailable: ${error.message}`);
-    return null;
+    return createUpdater({
+      autoUpdater: null,
+      app,
+      getWindow: activeWindow,
+      reason: error.message,
+    }).register(ipcMain);
   }
 }
 

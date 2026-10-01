@@ -4,7 +4,7 @@
 const assert = require("node:assert/strict");
 const { test, describe } = require("node:test");
 
-const { createUpdater, toStatus, DEFAULT_POLICY } = require("../lib/updater");
+const { createUpdater, toStatus, DEFAULT_POLICY, NO_FEED } = require("../lib/updater");
 const { UPDATE_CHANNEL, UPDATE_EVENT_CHANNEL } = require("../lib/contract");
 
 /** A recorder standing in for electron-updater. */
@@ -46,8 +46,40 @@ describe("update policy", () => {
     assert.equal(stub.autoUpdater.allowDowngrade, DEFAULT_POLICY.allowDowngrade);
   });
 
-  test("refuses to run without electron-updater rather than throwing later", () => {
-    assert.throws(() => createUpdater({ autoUpdater: null, app: {}, ipcMain: {} }), TypeError);
+  test("still registers the channel when there is no feed behind it", () => {
+    // The preload exposes checkUpdate in every build, so a channel nobody
+    // handles turns a click into a raw ipc error rather than a sentence.
+    const registered = new Map();
+    const updater = createUpdater({ autoUpdater: null, app: {}, getWindow: () => null });
+    updater.register({ handle: (channel, handler) => registered.set(channel, handler) });
+    assert.deepEqual([...registered.keys()], [UPDATE_CHANNEL]);
+    assert.equal(typeof registered.get(UPDATE_CHANNEL), "function");
+  });
+
+  test("answers with why, instead of leaving the renderer to guess", async () => {
+    const win = { webContents: { send: () => {} } };
+    const updater = createUpdater({ autoUpdater: null, app: {}, getWindow: () => win });
+    assert.deepEqual(await updater.check(trustedEvent(win)), {
+      ok: false,
+      version: null,
+      message: NO_FEED,
+    });
+  });
+
+  test("carries a caller-supplied reason when the updater failed to load", async () => {
+    const win = { webContents: { send: () => {} } };
+    const updater = createUpdater({
+      autoUpdater: null,
+      app: {},
+      getWindow: () => win,
+      reason: "missing module",
+    });
+    assert.equal((await updater.check(trustedEvent(win))).message, "missing module");
+  });
+
+  test("touches no updater at all when there is none", () => {
+    // No event wiring, so a null autoUpdater cannot throw inside the loop.
+    assert.doesNotThrow(() => createUpdater({ autoUpdater: null, app: {}, ipcMain: {} }));
   });
 
   test("registers the one check channel and nothing else", () => {
