@@ -6,6 +6,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # Types for a node far newer than the floor we run on would let you call
+      # an api that is not there, and it still compiles, so it never surfaces.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       # A react or vite bump is one review, not four.
       frontend:
@@ -30,6 +35,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 3
+    ignore:
+      # Same reason as the app tree: types ahead of the node floor lie quietly.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore(toolchain)"
 
