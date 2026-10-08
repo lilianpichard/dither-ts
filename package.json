@@ -64,9 +64,7 @@
     "coverage:node": "npm run build:test && c8 --all --include=\"dist-test/src/**/*.js\" --exclude=\"dist-test/test/**\" --reporter=text --reporter=lcov --check-coverage --lines=90 --functions=90 --branches=80 --statements=90 node --test dist-test/test/*.test.js",
     "dev": "npm --prefix app run dev",
     "desktop": "npm --prefix app run build && npm --prefix electron run dev",
-    "serve": "serve app/dist",
-    "serve:demo": "serve .",
-    "start": "npm run build:all && npm run serve",
+    "start": "npm run build:all && npm --prefix app run preview",
     "test": "npm run build:test && node --test dist-test/test/*.test.js",
     "test:all": "npm test && npm --prefix app test && npm --prefix electron test",
     "typecheck": "tsc --noEmit",
@@ -93,7 +91,6 @@
     "lint-staged": "^17.6.0",
     "oxlint": "^1.86.0",
     "prettier": "^3.9.9",
-    "serve": "^14.2.6",
     "typescript": "^7.0.2"
   }
 }
