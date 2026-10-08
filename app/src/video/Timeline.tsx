@@ -593,10 +593,6 @@ export default function Timeline({ active = true }: { active?: boolean }) {
               controller,
               total,
               monochrome: !snapshot.color,
-              // Original mode already posterises, so the frame's own colours fit
-              // in a GIF and are the right palette. Applying the chosen one on top
-              // was a second reduction, and the reason those exports looked mushy.
-              keepFrameColours: resolveColorMode(snapshot) === "original",
             });
 
       if (controller.signal.aborted) throw captureAbortError();

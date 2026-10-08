@@ -19,4 +19,13 @@ declare module "gifenc" {
     initialCapacity?: number;
     auto?: boolean;
   }): GifEncoderInstance;
+  /**
+   * A palette of at most `maxColors` colours taken from an RGBA buffer, by
+   * median cut. `format` defaults to rgb565, which is what a GIF wants.
+   */
+  export function quantize(
+    data: Uint8ClampedArray,
+    maxColors: number,
+    opts?: { format?: "rgb565" | "rgb444" | "rgba4444" },
+  ): GifPalette;
 }

@@ -10,21 +10,27 @@ const gifState = vi.hoisted(() => ({
   }>,
 }));
 
-vi.mock("gifenc", () => ({
-  GIFEncoder: vi.fn(() => {
-    const instance = {
-      writeFrame: vi.fn(),
-      finish: vi.fn(() => {
-        instance.finished = true;
-      }),
-      bytes: vi.fn(() => new Uint8Array(instance.finished ? 4 : 3)),
-      reset: vi.fn(),
-      finished: false,
-    };
-    gifState.instances.push(instance);
-    return instance;
-  }),
-}));
+// The real quantizer is needed for frames that outgrow a gif table; only the
+// encoder is faked, so the palette handed to writeFrame can be inspected.
+vi.mock("gifenc", async () => {
+  const actual = await vi.importActual<typeof import("gifenc")>("gifenc");
+  return {
+    ...actual,
+    GIFEncoder: vi.fn(() => {
+      const instance = {
+        writeFrame: vi.fn(),
+        finish: vi.fn(() => {
+          instance.finished = true;
+        }),
+        bytes: vi.fn(() => new Uint8Array(instance.finished ? 4 : 3)),
+        reset: vi.fn(),
+        finished: false,
+      };
+      gifState.instances.push(instance);
+      return instance;
+    }),
+  };
+});
 
 import { exportGif } from "./exportGif";
 

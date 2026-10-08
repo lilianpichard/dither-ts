@@ -1,4 +1,4 @@
-import { GIFEncoder } from "gifenc";
+import { GIFEncoder, quantize } from "gifenc";
 import { nearestRGBIndex, PALETTES, type RGB } from "../../../src/index.js";
 import {
   asyncFrameIterator,
@@ -14,12 +14,6 @@ import {
 export interface GifExportOptions extends ExportOptions {
   monochrome?: boolean;
   color?: boolean;
-  /**
-   * Take the GIF palette from the first frame's own colours when it has few
-   * enough to fit. Set for original colour mode, where the frame is already
-   * posterised and the chosen palette would be a second, needless reduction.
-   */
-  keepFrameColours?: boolean;
 }
 
 function hasPalette(name: string): boolean {
@@ -84,6 +78,9 @@ export function exactFramePalette(
   return [...seen].map((packed) => [(packed >> 16) & 255, (packed >> 8) & 255, packed & 255]);
 }
 
+/** A gif colour table is at most this wide. */
+const GIF_PALETTE_LIMIT = 256;
+
 export async function exportGif(
   frames: ExportFrameSource,
   fps: number,
@@ -128,11 +125,24 @@ export async function exportGif(
       if (width === undefined) {
         width = frame.width;
         height = frame.height;
-        if (!monochrome && options.keepFrameColours) {
+        if (!monochrome) {
+          // Exact first: a posterised or palette-locked frame already fits. A
+          // table of one colour is refused by the encoder, so a single-colour
+          // frame falls through rather than producing a broken gif.
           const exact = exactFramePalette(frame.data);
-          if (exact && exact.length > 0) {
+          if (exact !== null && exact.length > 1) {
             palette = exact.map(([r, g, b]) => [r, g, b]);
             gifPalette = exact;
+          } else {
+            // Too many colours for a table, so build one from the frame. The
+            // old fallback was the configured palette, which is two colours
+            // wide when a preset names one the kernel does not have, and that
+            // is what turned a colour preview into a black and white gif.
+            const fitted = quantize(frame.data, GIF_PALETTE_LIMIT);
+            if (fitted.length > 1) {
+              palette = fitted.map(([r, g, b]) => [r, g, b]);
+              gifPalette = fitted;
+            }
           }
         }
       } else if (frame.width !== width || frame.height !== height) {
