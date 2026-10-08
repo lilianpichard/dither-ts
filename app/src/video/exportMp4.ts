@@ -269,6 +269,60 @@ export async function waitForEncoderCapacity(
   });
 }
 
+/** One encoder output waiting for its turn, so its metadata is not dropped. */
+interface QueuedChunk {
+  chunk: EncodedVideoChunk;
+  meta?: EncodedVideoChunkMetadata;
+}
+
+/**
+ * Holds encoder output until it can be handed on in DTS order.
+ *
+ * `encodeFrame` stamps each frame with `index * frameDuration`, so the input is
+ * already ordered. The encoder's output is not: it comes back in decode order,
+ * and a profile that uses B-frames transposes neighbouring pictures, so the
+ * chunk for frame 2 can arrive before the chunk for frame 1. The muxer rejects
+ * anything that is not monotonically increasing, which is the "DTS went from
+ * 166667 to 83333" failure. Holding each chunk until its index comes up makes
+ * the order correct whatever the encoder does.
+ */
+export function createChunkReorderer(
+  write: (chunk: EncodedVideoChunk, meta?: EncodedVideoChunkMetadata) => void,
+  frameDuration: number,
+): {
+  push: (chunk: EncodedVideoChunk, meta?: EncodedVideoChunkMetadata) => void;
+  settle: () => void;
+} {
+  if (!Number.isFinite(frameDuration) || frameDuration <= 0) {
+    throw new RangeError("frame duration must be a finite positive number");
+  }
+  const held = new Map<number, QueuedChunk>();
+  let next = 0;
+
+  return {
+    push(chunk, meta) {
+      held.set(Math.round(chunk.timestamp / frameDuration), { chunk, meta });
+      // Only the next index may go out, so the write order is 0, 1, 2 ...
+      let ready = held.get(next);
+      while (ready) {
+        held.delete(next);
+        write(ready.chunk, ready.meta);
+        next++;
+        ready = held.get(next);
+      }
+    },
+    /** Whatever is left once the source is exhausted, still in DTS order. */
+    settle() {
+      for (const index of [...held.keys()].sort((a, b) => a - b)) {
+        const entry = held.get(index)!;
+        held.delete(index);
+        write(entry.chunk, entry.meta);
+      }
+      next = 0;
+    },
+  };
+}
+
 export function encodeFrame(
   encoder: VideoEncoder,
   frame: ExportFrame,
@@ -329,6 +383,9 @@ export async function exportMp4(
       fastStart: "in-memory",
       firstTimestampBehavior: "offset",
     });
+    const reorder = createChunkReorderer((chunk, meta) => {
+      muxer?.addVideoChunk(chunk, meta);
+    }, 1_000_000 / fps);
     encoderFailure = new Promise<never>((_, reject) => {
       rejectFailure = reject;
     });
@@ -343,7 +400,9 @@ export async function exportMp4(
         }
         encodedBytes += chunkBytes;
         try {
-          muxer?.addVideoChunk(chunk, meta);
+          // Decode order is not presentation order, so a chunk can arrive a
+          // frame early and must wait for its turn.
+          reorder.push(chunk, meta);
         } catch (error) {
           encoderError = asError(error);
           rejectFailure?.(encoderError);
@@ -388,6 +447,8 @@ export async function exportMp4(
     await Promise.race([awaitWithSignal(encoder.flush(), signal), encoderFailure]);
     throwIfAborted(signal);
     if (encoderError) throw encoderError;
+    // A flush can also emit out of order, so the tail is settled here.
+    reorder.settle();
     muxer.finalize();
     const buffer = muxer.target.buffer;
     if (!(buffer instanceof ArrayBuffer)) {
