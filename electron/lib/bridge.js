@@ -57,7 +57,11 @@ function checkOpenLimits(picked, kind, multiple, limits) {
       multiple ? `pick no more than ${maxFiles} files at a time` : "pick one file at a time",
     );
   }
-  const perFile = kind === "video" ? limits.maxVideoBytes : limits.maxImageBytes;
+  // "media" is the single picker: it takes either, so the larger of the two
+  // per-file caps applies. A video picked through it is still a video, and its
+  // own size is what matters, not the dialog that named it.
+  const perFile =
+    kind === "video" || kind === "media" ? limits.maxVideoBytes : limits.maxImageBytes;
   let total = 0;
   for (const file of picked) {
     if (file.size > perFile) {
@@ -81,7 +85,7 @@ function createBridge({ dialog, getWindow, homeDir, limits }) {
     const win = trustedWindow(event, getWindow);
     const { kind, multiple } = parseOpenRequest(raw);
     const picked = await dialog.showOpenDialog(win, {
-      title: kind === "video" ? "Open a video" : multiple ? "Open images" : "Open an image",
+      title: multiple ? "Open images" : "Open an image or a video",
       properties: multiple ? ["openFile", "multiSelections"] : ["openFile"],
       filters: paths.openFilters(kind),
     });

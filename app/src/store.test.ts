@@ -8,6 +8,13 @@ type SplitState = ReturnType<typeof useApp.getState> & {
   setPreview: (result: RenderResult | null) => void;
 };
 
+const mediaFrame = () => ({
+  display: { width: 1, height: 1, pixels: new ArrayBuffer(4) },
+  compare: { width: 1, height: 1, pixels: new ArrayBuffer(4) },
+  geometry: { width: 1, height: 1, pixels: new ArrayBuffer(4) },
+  clipKey: "clip",
+});
+
 const source: ImageSource = {
   width: 1,
   height: 1,
@@ -297,5 +304,82 @@ describe("store history", () => {
       [1, 2, 3],
       [250, 251, 252],
     ]);
+  });
+});
+
+describe("one source at a time", () => {
+  it("drops the still when a clip takes the canvas", () => {
+    state().setSource(source);
+    state().showVideo(mediaFrame());
+
+    expect(state().source).toBeNull();
+    expect(state().media).toBe("video");
+    expect(state().isVideo(state())).toBe(true);
+  });
+
+  it("drops the video frame when a still takes the canvas", () => {
+    state().showVideo(mediaFrame());
+    state().setSource(source);
+
+    expect(state().videoPreview).toBeNull();
+    expect(state().media).toBe("image");
+    expect(state().isVideo(state())).toBe(false);
+  });
+
+  it("keeps whichever the user loaded last", () => {
+    // The reported bug: an image was loaded, a clip was loaded, and opening the
+    // video panel handed the canvas back. Neither can steal it now.
+    state().setSource(source);
+    state().showVideo(mediaFrame());
+    state().setSource(source);
+    state().showVideo(mediaFrame());
+    expect(state().media).toBe("video");
+    expect(state().source).toBeNull();
+    expect(state().videoPreview).not.toBeNull();
+  });
+
+  it("clears the subject when the owner calls back with nothing", () => {
+    state().showVideo(mediaFrame());
+    state().showVideo(null);
+    expect(state().media).toBeNull();
+    expect(state().videoPreview).toBeNull();
+
+    state().setSource(source);
+    state().setSource(null);
+    expect(state().media).toBeNull();
+  });
+
+  it("leaves the other kind's marker alone when it was never the owner", () => {
+    // Clearing the video must not blank out an image that is already showing.
+    state().setSource(source);
+    state().showVideo(mediaFrame());
+    state().showVideo(null);
+    expect(state().media).toBeNull();
+  });
+});
+
+describe("a video arriving from the shared picker", () => {
+  it("hands the file to the timeline and clears itself", () => {
+    const file = new File(["x"], "clip.mp4", { type: "video/mp4" });
+    state().loadVideo(file);
+    expect(state().pendingVideo).toBe(file);
+    state().loadVideo(null);
+    expect(state().pendingVideo).toBeNull();
+  });
+});
+
+describe("loading a video over a still", () => {
+  it("drops the still as the file is handed over", () => {
+    state().setSource(source);
+    expect(state().media).toBe("image");
+    // The picker routes a video by clearing the still first, so the canvas is
+    // uncontested before the clip is even decoded.
+    state().setSource(null);
+    state().loadVideo(new File(["x"], "clip.mp4", { type: "video/mp4" }));
+    expect(state().source).toBeNull();
+    expect(state().media).toBeNull();
+    state().showVideo(mediaFrame());
+    expect(state().media).toBe("video");
+    expect(state().isVideo(state())).toBe(true);
   });
 });

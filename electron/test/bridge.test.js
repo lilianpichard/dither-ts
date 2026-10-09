@@ -279,6 +279,21 @@ describe("bridge open limits", () => {
     );
   });
 
+  test("caps a video picked through the shared dialog too", async () => {
+    // One picker takes either kind, so the video cap has to apply to it as well:
+    // the dialog that named the file is not what its size depends on.
+    const clip = path.join(dir, "clip.mp4");
+    await fs.writeFile(clip, Buffer.alloc(32, 1));
+    const { bridge, dialog, event } = harness({
+      limits: { maxVideoBytes: 16, maxImageBytes: 1024 },
+    });
+    dialog.queueOpen({ canceled: false, filePaths: [clip] });
+    await assert.rejects(
+      bridge.handlers[CHANNELS.open](event, { kind: "media" }),
+      /clip\.mp4 is over the 0 MB limit for a media/,
+    );
+  });
+
   test("caps how many files one selection may carry", async () => {
     const picks = await Promise.all([image("a.png", 4), image("b.png", 4), image("c.png", 4)]);
     const { bridge, dialog, event } = harness({ limits: { maxFiles: 2 } });

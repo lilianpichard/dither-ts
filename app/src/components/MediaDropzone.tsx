@@ -3,11 +3,13 @@ import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { canOpenFiles } from "@/desktop/bridge";
-import { openFailure, openImage } from "@/desktop/files";
+import { openFailure, openMedia } from "@/desktop/files";
+import { MEDIA_ACCEPT, mediaKindOf, type MediaKind } from "@/media/kind";
 import { cn } from "@/lib/utils";
 
-interface ImageDropzoneProps {
-  onFile: (file: File) => void;
+interface MediaDropzoneProps {
+  /** Called with the file and what it turned out to be. */
+  onFile: (file: File, kind: MediaKind) => void;
   /** Currently loaded file name, shared across every picker instance. */
   fileName?: string;
   disabled?: boolean;
@@ -21,22 +23,24 @@ interface ImageDropzoneProps {
 }
 
 /**
- * Compact image dropzone (click + drag & drop). Icon square + label +
- * hint in one discreet row; bouncing icon + highlighted border while
- * dragging; spinner + busy label while working. Keyboard accessible
- * (real <button>). Shows the shared loaded file name when provided.
+ * One dropzone for image and video alike. It detects which kind was dropped or
+ * picked and hands it on, so there is no separate "video" entry point to know
+ * about. Icon square + label + hint in one discreet row; bouncing icon and
+ * highlighted border while dragging; spinner and busy label while working.
+ * A real button, so it is keyboard accessible, and it shows the shared file
+ * name once something is loaded.
  */
-export function ImageDropzone({
+export function MediaDropzone({
   onFile,
   fileName,
   disabled = false,
   busy = false,
   busyLabel = "Loading…",
-  label = "Choose an image",
+  label = "Drop image or video",
   hint = "Click or drop a file",
   leading,
   className,
-}: ImageDropzoneProps) {
+}: MediaDropzoneProps) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const dragCount = React.useRef(0);
   const [dragging, setDragging] = React.useState(false);
@@ -46,21 +50,22 @@ export function ImageDropzone({
 
   const handleFile = (file: File | undefined | null) => {
     if (!file || inactive) return;
-    if (!file.type.startsWith("image/")) {
+    const kind = mediaKindOf(file);
+    if (kind === null) {
       // The picker filters on accept, but a drop does not, and a silent no-op
       // looks like the app is broken.
-      toast.error(`${file.name || "That file"} is not an image.`);
+      toast.error(`${file.name || "That file"} is not an image or a video.`);
       return;
     }
-    onFile(file);
+    onFile(file, kind);
   };
 
   async function pick() {
     try {
-      const file = await openImage();
+      const file = await openMedia();
       if (file) handleFile(file);
     } catch (error) {
-      toast.error(`Could not open that image: ${openFailure(error)}`);
+      toast.error(`Could not open that file: ${openFailure(error)}`);
     }
   }
 
@@ -117,7 +122,7 @@ export function ImageDropzone({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-body font-bold text-foreground">
-            {busy ? busyLabel : dragging ? "Drop the image" : (fileName ?? label)}
+            {busy ? busyLabel : dragging ? "Drop the file" : (fileName ?? label)}
           </span>
           {!busy && (
             <span className="block truncate text-label text-muted-foreground">
@@ -129,7 +134,7 @@ export function ImageDropzone({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept={MEDIA_ACCEPT}
         tabIndex={-1}
         aria-hidden
         className="hidden"

@@ -4,7 +4,8 @@
 
 import { desktopBridge, type DesktopFile } from "./bridge";
 
-export type MediaKind = "image" | "video";
+/** As the shell understands it: "media" is the picker that offers both. */
+export type MediaKind = "image" | "video" | "media";
 
 /** The bridge's bytes go straight in: a Blob part reads the view, not its buffer. */
 function toFile(file: DesktopFile): File {
@@ -30,6 +31,16 @@ export async function openFiles(
 /** Open one image, or null when cancelled or unavailable. */
 export async function openImage(): Promise<File | null> {
   const files = await openFiles("image");
+  return files?.[0] ?? null;
+}
+
+/**
+ * Open one file of either kind, or null when cancelled or unavailable. This is
+ * the single picker the shared dropzone and the empty state both use, so the
+ * user never has to know which panel a video goes in.
+ */
+export async function openMedia(): Promise<File | null> {
+  const files = await openFiles("media");
   return files?.[0] ?? null;
 }
 

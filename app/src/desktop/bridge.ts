@@ -18,7 +18,8 @@ export interface DesktopFile {
 }
 
 export interface OpenRequest {
-  kind: "image" | "video";
+  /** "media" is the one picker that offers both kinds. */
+  kind: "image" | "video" | "media";
   multiple?: boolean;
 }
 

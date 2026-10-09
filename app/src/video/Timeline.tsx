@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Film,
   Pause,
   Play,
   Repeat,
@@ -28,8 +27,6 @@ import {
   loadClip,
   type LoadedClip,
 } from "./decode";
-import { canOpenFiles } from "../desktop/bridge";
-import { openFailure, openFiles } from "../desktop/files";
 import { saveBlob } from "../desktop/save";
 import { describeAudioStatus, probeAudioCapture } from "./audio";
 import { exportGif } from "./exportGif";
@@ -84,6 +81,9 @@ export default function Timeline({ active = true }: { active?: boolean }) {
   const effects = useApp((s) => s.effects);
   const operations = useApp((s) => s.operations);
   const setVideoPreview = useApp((s) => s.setVideoPreview);
+  const media = useApp((s) => s.media);
+  const pendingVideo = useApp((s) => s.pendingVideo);
+  const loadVideo = useApp((s) => s.loadVideo);
   const [clip, setClip] = useState<LoadedClip | null>(null);
   const duration = clip?.info.duration ?? 0;
   const [fileName, setFileName] = useState("");
@@ -148,15 +148,6 @@ export default function Timeline({ active = true }: { active?: boolean }) {
   function cancelExport(): void {
     exportAbort.current?.abort();
     exportPool.current?.invalidate();
-  }
-
-  async function onPickVideo(): Promise<void> {
-    try {
-      const file = (await openFiles("video"))?.[0];
-      if (file) await onFile(file);
-    } catch (error) {
-      toast.error(`Could not open that video: ${openFailure(error)}`);
-    }
   }
 
   async function onFile(file: File | undefined) {
@@ -340,6 +331,29 @@ export default function Timeline({ active = true }: { active?: boolean }) {
   useEffect(() => {
     return () => setVideoPreview(null);
   }, [setVideoPreview]);
+
+  // A file picked outside this panel. The rail and the empty state both take an
+  // image or a video, so a video arrives here through the store rather than
+  // through a picker that only ever existed in this panel, and it runs the same
+  // loader every other route takes.
+  useEffect(() => {
+    if (!pendingVideo) return;
+    loadVideo(null);
+    void onFile(pendingVideo);
+  }, [pendingVideo, loadVideo, onFile]);
+
+  // An image took the canvas, so this clip stops being the subject. The clip
+  // itself stays loaded and exportable, which is why it is not discarded here:
+  // what ends is the fight over the canvas.
+  useEffect(() => {
+    if (media !== "image" || clipRef.current === null) return;
+    previewAbort.current?.abort();
+    cancelAll(PREVIEW_SCOPE);
+    previewSeq.current++;
+    setPlaying(false);
+    clipRef.current.element.pause();
+    resetLivePreview();
+  }, [media, cancelAll]);
 
   /** Forget the coalescing state so the next run starts on a fresh frame. */
   function resetLivePreview(): void {
@@ -645,29 +659,9 @@ export default function Timeline({ active = true }: { active?: boolean }) {
   return (
     <div className="flex h-full flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        {canOpenFiles() ? (
-          <Button
-            variant="secondary"
-            disabled={working}
-            aria-label="Choose a video"
-            onClick={() => void onPickVideo()}
-          >
-            <Film /> Choose video
-          </Button>
-        ) : (
-          <>
-            <Label htmlFor="video-file" className="sr-only">
-              Video file
-            </Label>
-            <Input
-              id="video-file"
-              type="file"
-              accept="video/*"
-              className="w-full max-w-64"
-              onChange={(e) => void onFile(e.target.files?.[0])}
-            />
-          </>
-        )}
+        {/* Loading happens in the rail and the empty state, which take an image
+            or a video. This panel never needs its own picker, which is what let
+            an image and a clip both be loaded at once. */}
         {clip && (
           <Badge variant="secondary">
             {clip.info.width}×{clip.info.height}, {clip.info.duration.toFixed(1)}s

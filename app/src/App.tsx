@@ -15,6 +15,8 @@ import { PanelResizer } from "./components/PanelResizer";
 import { usePanelSize } from "./lib/panelSize";
 import { SLOW_OPERATION_MS, warnIfSlow } from "./lib/slowOperation";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { MEDIA_ACCEPT, mediaKindOf, type MediaKind } from "./media/kind";
+import { mediaRejection, routeMedia } from "./media/route";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -72,6 +74,7 @@ export default function App() {
   const setPreview = useApp((state) => state.setPreview);
   const setRendering = useApp((state) => state.setRendering);
   const setPreviewScaled = useApp((state) => state.setPreviewScaled);
+  const loadVideo = useApp((state) => state.loadVideo);
   const [tool, setTool] = useState<ToolId>("presets");
   const fileSequence = useRef(0);
   const renderAbort = useRef<AbortController | null>(null);
@@ -104,7 +107,16 @@ export default function App() {
     [source, rendering, result, previewScaled],
   );
 
-  async function onFile(file: File | undefined) {
+  /**
+   * One entry for both kinds. The rail, the empty-state picker and the desktop
+   * dialog all land here, and the routing is pure so there is exactly one place
+   * that decides which kind a file is and who takes the canvas.
+   */
+  async function onFile(file: File, kind: MediaKind) {
+    if (kind === "video") {
+      routeMedia(file, kind, { setSource, loadVideo });
+      return;
+    }
     if (!file) return;
     const sequence = ++fileSequence.current;
     try {
@@ -276,7 +288,7 @@ export default function App() {
       </div>
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <ControlPanel
-          onFile={(file) => void onFile(file)}
+          onFile={(file, kind) => void onFile(file, kind)}
           width={rail.size}
           collapsed={rail.collapsed}
         />
@@ -336,7 +348,9 @@ export default function App() {
               <Empty className="h-full">
                 <EmptyHeader>
                   <EmptyTitle className="text-display uppercase">Drop image</EmptyTitle>
-                  <EmptyDescription>Choose a file to start dithering.</EmptyDescription>
+                  <EmptyDescription>
+                    Choose an image or a video to start dithering.
+                  </EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
                   {/* Board C01: 262x42 raised button, label 10px/700. */}
@@ -351,12 +365,15 @@ export default function App() {
                   <input
                     ref={pickerRef}
                     type="file"
-                    accept="image/*"
+                    accept={MEDIA_ACCEPT}
                     tabIndex={-1}
                     aria-hidden
                     className="hidden"
                     onChange={(e) => {
-                      void onFile(e.target.files?.[0]);
+                      const next = e.target.files?.[0];
+                      const kind = next ? mediaKindOf(next) : null;
+                      if (next && kind) void onFile(next, kind);
+                      else if (next) toast.error(mediaRejection(next));
                       e.currentTarget.value = "";
                     }}
                   />

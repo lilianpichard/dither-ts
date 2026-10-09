@@ -69,6 +69,23 @@ describe("openFilters", () => {
       { name: "Videos", extensions: Object.keys(VIDEO_TYPES) },
     ]);
   });
+
+  test("offers both kinds in one dialog, labelled separately", () => {
+    // The shared picker: one dialog, so the user sees which folder is which
+    // instead of hunting through one flat list.
+    assert.deepEqual(openFilters("media"), [
+      { name: "Images", extensions: Object.keys(IMAGE_TYPES) },
+      { name: "Videos", extensions: Object.keys(VIDEO_TYPES) },
+    ]);
+  });
+});
+
+describe("mediaTypeFor", () => {
+  test("types either kind for the shared picker", () => {
+    assert.equal(mediaTypeFor("a.png", "media"), "image/png");
+    assert.equal(mediaTypeFor("a.mp4", "media"), "video/mp4");
+    assert.equal(mediaTypeFor("a.zip", "media"), null);
+  });
 });
 
 describe("saveExtensionFor", () => {

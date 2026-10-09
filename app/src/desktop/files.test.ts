@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DesktopBridge, DesktopFile } from "./bridge";
-import { openFailure, openFiles, openImage } from "./files";
+import { openFailure, openFiles, openImage, openMedia } from "./files";
 
 /** Bytes for one file, as the main process would send them. */
 function payload(name: string, type: string, bytes: number[]): DesktopFile {
@@ -113,5 +113,21 @@ describe("openFiles", () => {
       })),
     });
     expect((await openImage())?.name).toBe("a.png");
+  });
+
+  it("opens one dialog that offers both kinds", async () => {
+    const bridge = expose({
+      open: vi.fn(async () => ({
+        canceled: false,
+        files: [payload("a.png", "image/png", [1])],
+      })),
+    });
+    expect((await openMedia())?.name).toBe("a.png");
+    // The shell offers both, so one control covers image and video.
+    expect(bridge.open).toHaveBeenCalledWith({ kind: "media", multiple: false });
+  });
+
+  it("returns nothing from the shared picker when there is no bridge", async () => {
+    expect(await openMedia()).toBeNull();
   });
 });

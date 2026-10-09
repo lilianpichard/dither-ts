@@ -224,12 +224,13 @@ describe("preload", () => {
 });
 
 describe("request validation", () => {
-  test("accepts an image or video open and nothing else", () => {
+  test("accepts an image, a video, or either in one dialog, and nothing else", () => {
     assert.deepEqual(parseOpenRequest({ kind: "image" }), { kind: "image", multiple: false });
     assert.deepEqual(parseOpenRequest({ kind: "video", multiple: true }), {
       kind: "video",
       multiple: true,
     });
+    assert.deepEqual(parseOpenRequest({ kind: "media" }), { kind: "media", multiple: false });
     for (const bad of [null, "image", [], {}, { kind: "audio" }, { kind: 1 }]) {
       assert.throws(() => parseOpenRequest(bad), TypeError);
     }

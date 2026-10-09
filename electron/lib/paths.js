@@ -80,15 +80,27 @@ function extensionOf(name) {
 
 /** The media type for a name, or null when the extension is not one we serve. */
 function mediaTypeFor(name, kind) {
-  const table = kind === "video" ? VIDEO_TYPES : IMAGE_TYPES;
-  return table[extensionOf(name)] ?? null;
+  const extension = extensionOf(name);
+  if (kind === "video") return VIDEO_TYPES[extension] ?? null;
+  if (kind === "image") return IMAGE_TYPES[extension] ?? null;
+  // "media": either. The renderer decides which it was, the same way the web
+  // app's own drop does.
+  return VIDEO_TYPES[extension] ?? IMAGE_TYPES[extension] ?? null;
 }
 
 /** Dialog filters for one kind of media, built from the tables above. */
 function openFilters(kind) {
-  const table = kind === "video" ? VIDEO_TYPES : IMAGE_TYPES;
-  const label = kind === "video" ? "Videos" : "Images";
-  return [{ name: label, extensions: Object.keys(table) }];
+  if (kind === "image" || kind === "video") {
+    const table = kind === "video" ? VIDEO_TYPES : IMAGE_TYPES;
+    const label = kind === "video" ? "Videos" : "Images";
+    return [{ name: label, extensions: Object.keys(table) }];
+  }
+  // One dialog offering both, listed separately so the user can see which is
+  // which instead of hunting through one flat list.
+  return [
+    { name: "Images", extensions: Object.keys(IMAGE_TYPES) },
+    { name: "Videos", extensions: Object.keys(VIDEO_TYPES) },
+  ];
 }
 
 /** The extension a save dialog should default to for a file name. */

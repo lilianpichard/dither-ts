@@ -62,6 +62,8 @@ export interface VideoPreview {
 }
 
 interface AppState {
+  /** Which source owns the canvas, so the two can never both be live. */
+  media: "image" | "video" | null;
   source: ImageSource | null;
   params: DitherParams;
   effects: StackedEffect[];
@@ -80,6 +82,16 @@ interface AppState {
   past: HistoryEntry[];
   future: HistoryEntry[];
   setSource: (source: ImageSource | null) => void;
+  /**
+   * Take the canvas for a video. The still is dropped, so an image and a clip
+   * can never both be live: whichever the user loaded last is the subject, and
+   * clicking away from the video panel cannot hand it back.
+   */
+  showVideo: (videoPreview: VideoPreview | null) => void;
+  setRendering: (rendering: boolean) => void;
+  /** A file the shared picker routed to the video panel, waiting to load. */
+  pendingVideo: File | null;
+  loadVideo: (file: File | null) => void;
   /** Params are merged; a given `operations` set replaces the current one. */
   setParams: (params: Partial<DitherParams>, operations?: Partial<ImageOperations>) => void;
   /** Patch the operation set, leaving untouched fields alone. */
@@ -90,7 +102,8 @@ interface AppState {
   setResult: (result: RenderResult | null) => void;
   setPreview: (preview: RenderResult | null) => void;
   setVideoPreview: (videoPreview: VideoPreview | null) => void;
-  setRendering: (rendering: boolean) => void;
+  /** True when a video is the subject, for the controls that differ. */
+  isVideo: (state: AppState) => boolean;
   setPreviewScaled: (previewScaled: boolean) => void;
   setEffects: (effects: StackedEffect[]) => void;
   addEffect: (type: string) => void;
@@ -143,6 +156,9 @@ export const useApp = create<AppState>()((set) => ({
   previewScaled: false,
   past: EMPTY_HISTORY.past,
   future: EMPTY_HISTORY.future,
+  media: null,
+  pendingVideo: null,
+  loadVideo: (file) => set({ pendingVideo: file }),
   setSource: (source) =>
     set((state) => ({
       source,
@@ -150,10 +166,11 @@ export const useApp = create<AppState>()((set) => ({
       operations: fitToSource(source, state.operations),
       result: null,
       preview: null,
-      // Loading an image hands the canvas back to it. The timeline keeps its
-      // clip either way and re-asserts the frame when its tab is reopened, so
-      // this is a change of subject, not a discard.
+      // An image is the subject now, so whatever video frame was on the canvas
+      // goes. The clip itself stays loaded in the timeline, but it no longer
+      // owns the canvas and cannot take it back by a tab being reopened.
       videoPreview: null,
+      media: source === null ? (state.media === "image" ? null : state.media) : "image",
       rendering: false,
       previewScaled: false,
     })),
@@ -227,8 +244,17 @@ export const useApp = create<AppState>()((set) => ({
   setResult: (result) => set({ result, preview: null, rendering: false }),
   setPreview: (preview) => set({ preview }),
   setVideoPreview: (videoPreview) => set({ videoPreview }),
+  showVideo: (videoPreview) =>
+    set((state) => ({
+      videoPreview,
+      media: videoPreview === null ? (state.media === "video" ? null : state.media) : "video",
+      // Loading a clip hands the canvas over, so the still is dropped exactly
+      // as loading an image drops the clip.
+      source: videoPreview === null ? state.source : null,
+    })),
   setRendering: (rendering) => set({ rendering }),
   setPreviewScaled: (previewScaled) => set({ previewScaled }),
+  isVideo: (state) => state.media === "video",
   setEffects: (effects) => set({ effects, result: null }),
   addEffect: (type) =>
     set((state) => ({

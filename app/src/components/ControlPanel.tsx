@@ -5,8 +5,9 @@ import { toast } from "sonner";
 import { resolveColorMode, useApp } from "../store";
 import { describeRenderStatus } from "../status";
 import PaletteEditor from "../palette/PaletteEditor";
-import { ImageDropzone } from "./ImageDropzone";
+import { MediaDropzone } from "./MediaDropzone";
 import OperationsPanel from "./OperationsPanel";
+import type { MediaKind } from "@/media/kind";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import {
@@ -90,11 +91,11 @@ function useSource() {
  * miniature, the file name and the dimensions, and still opens the picker or
  * accepts a drop, so another image can always be loaded without a reload.
  */
-function SourceChip({ onFile }: { onFile: (f: File | undefined) => void }) {
+function SourceChip({ onFile }: { onFile: (file: File, kind: MediaKind) => void }) {
   const source = useSource();
   return (
-    <ImageDropzone
-      onFile={(f) => onFile(f)}
+    <MediaDropzone
+      onFile={(file, kind) => onFile(file, kind)}
       className="w-full"
       fileName={source?.name}
       leading={source ? <SourceThumb source={source} /> : undefined}
@@ -113,7 +114,7 @@ export default function ControlPanel({
   width,
   collapsed,
 }: {
-  onFile: (f: File | undefined) => void;
+  onFile: (file: File, kind: MediaKind) => void;
   width: number;
   collapsed: boolean;
 }) {

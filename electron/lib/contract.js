@@ -16,7 +16,7 @@ const UPDATE_CHANNEL = "dither:update";
 const UPDATE_EVENT_CHANNEL = "dither:update-event";
 
 /** What the renderer is allowed to ask the open dialog for. */
-const OPEN_KINDS = Object.freeze(["image", "video"]);
+const OPEN_KINDS = Object.freeze(["image", "video", "media"]);
 
 /** A rendered frame or clip, not a library: room for a long video. */
 const MAX_SAVE_BYTES = 2 * 1024 * 1024 * 1024;
