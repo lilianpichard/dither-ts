@@ -169,6 +169,7 @@ export const en = {
     "Presets could not be saved. Browser storage is full or blocked, so they last for this session only.",
 
   // Batch panel.
+  "batch.emptyHint": "Select multiple images to render each with the current settings.",
   "batch.empty": "No batch yet",
   "batch.label": "Batch",
   "batch.pick": "Batch images",
@@ -395,6 +396,7 @@ const fr: Record<MessageId, string> = {
   "presets.storageFull":
     "Les préréglages n''ont pas pu être enregistrés. Le stockage du navigateur est plein ou bloqué, ils ne dureront que pour cette session.",
 
+  "batch.emptyHint": "Sélectionner plusieurs images à rendre avec les réglages actuels.",
   "batch.empty": "Aucun lot pour le moment",
   "batch.label": "Lot",
   "batch.pick": "Images du lot",

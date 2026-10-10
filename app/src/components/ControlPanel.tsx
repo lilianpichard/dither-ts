@@ -21,6 +21,14 @@ import {
 import { Slider } from "@/components/ui/slider";
 
 /**
+ * The block size the rail offers. 128 keeps visible structure on a 1080p frame
+ * at about fifteen blocks per row; past it the kernel still runs but answers
+ * with one block per row, which is not a control worth exposing.
+ */
+export const PIXEL_SIZE_MIN = 1;
+export const PIXEL_SIZE_MAX = 128;
+
+/**
  * The three colour modes: greyscale, quantise to a palette, or keep the photo's
  * own. Only the ids live here; the labels come from the catalogue.
  */
@@ -284,8 +292,8 @@ export default function ControlPanel({
       <Field label={t("rail.pixelSize", { value: params.pixelSize })}>
         <Slider
           aria-label={t("rail.pixelSize", { value: params.pixelSize })}
-          min={1}
-          max={8}
+          min={PIXEL_SIZE_MIN}
+          max={PIXEL_SIZE_MAX}
           step={1}
           value={[params.pixelSize]}
           onValueChange={([v]) => setParams({ pixelSize: v })}

@@ -267,9 +267,7 @@ export default function BatchPanel() {
         <Empty>
           <EmptyHeader>
             <EmptyTitle>{t("batch.empty")}</EmptyTitle>
-            <EmptyDescription>
-              Select multiple images to render each with the current settings.
-            </EmptyDescription>
+            <EmptyDescription>{t("batch.emptyHint")}</EmptyDescription>
           </EmptyHeader>
         </Empty>
       )}
