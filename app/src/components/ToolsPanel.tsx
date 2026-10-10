@@ -37,11 +37,14 @@ export default function ToolsPanel({
   tool,
   onTool,
   height,
+  width,
 }: {
   tool: ToolId;
   onTool: (t: ToolId) => void;
   /** Owned by the shell so the console can be dragged and collapsed. */
-  height: number;
+  height: number | "100%";
+  /** Only set when the console hangs off the side rather than the bottom. */
+  width?: number;
 }) {
   // Each panel publishes its own count into the console header.
   const [meta, setMeta] = useState("");
@@ -51,7 +54,7 @@ export default function ToolsPanel({
     <Tabs
       value={tool}
       onValueChange={(v) => onTool(v as ToolId)}
-      style={{ height }}
+      style={width === undefined ? { height, width: "100%" } : { height, width }}
       // flex-initial (flex: 0 1 auto) is load-bearing twice over: the Tabs
       // primitive ships flex-1, and a flex item's flex-basis beats `height`, so
       // without it the shell's height is ignored. Shrink is left on so a short

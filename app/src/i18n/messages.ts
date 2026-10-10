@@ -8,6 +8,13 @@
 // literal apostrophe is written '' (two of them).
 
 export const en = {
+  // Where each panel sits: the rail's side and the console's side.
+  "layout.rail": "Controls side",
+  "layout.railLeft": "Left",
+  "layout.railRight": "Right",
+  "layout.console": "Console side",
+  "layout.consoleBottom": "Bottom",
+  "layout.consoleRight": "Right",
   // Words used in more than one panel.
   "tool.presets": "Presets",
   "tool.effects": "Effects",
@@ -259,6 +266,13 @@ const fr: Record<MessageId, string> = {
   "presets.saveCurrent": "Enregistrer les réglages",
   "presets.addOriginals": "Ajouter les originaux",
   "language.pick": "Langue",
+  // Where each panel sits: the rail's side and the console's side.
+  "layout.rail": "Côté des réglages",
+  "layout.railLeft": "Gauche",
+  "layout.railRight": "Droite",
+  "layout.console": "Côté de la console",
+  "layout.consoleBottom": "Bas",
+  "layout.consoleRight": "Droite",
   "common.retry": "Réessayer",
   "common.cancel": "Annuler",
   "common.save": "Enregistrer",

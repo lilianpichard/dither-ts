@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { cn } from "cn";
 import { cancelAll, renderImage } from "./worker/client";
 import { stripKeys } from "./presets/store";
 import { resolveColorMode, useApp } from "./store";
@@ -18,6 +19,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { MEDIA_ACCEPT, mediaKindOf, type MediaKind } from "./media/kind";
 import { cappedPixelSize } from "./video/pixelSize";
 import { useTranslate } from "./i18n";
+import { useLayout } from "./layout";
 import { useGlobalErrors } from "./ErrorReporting";
 import { mediaRejection, routeMedia } from "./media/route";
 import { Button } from "@/components/ui/button";
@@ -35,6 +37,11 @@ const RAIL_MIN = 176;
 const CONSOLE_MIN = 120;
 const RAIL_DEFAULT = 256;
 const CONSOLE_DEFAULT = 300;
+// The space the shell keeps for the canvas, so a panel can never be dragged over
+// the work. The rail claims a width, the console a height, and each panel's own
+// maximum is the window minus the claim the other one makes on its axis.
+const CANVAS_MIN_W = 420;
+const CANVAS_MIN_H = 260;
 // Long enough that no legitimate render reaches it: the slow warning already
 // covers a render that is merely big. This only catches a worker that stopped
 // answering, which would otherwise leave the overlay up forever.
@@ -287,6 +294,15 @@ export default function App() {
   // Dimensions for the meta line, so it describes the frame actually on screen
   // rather than a still image that may not be loaded at all.
   const meta = video ? video.display : (shown ?? source);
+  // The arrangement is a preference, so the shell reads it once and the panels
+  // follow. Sizes stay local to each panel, which is why only the sides are
+  // held in state.
+  const { layout } = useLayout();
+  // A panel can be dragged until the other one is at its own minimum, which is
+  // the whole window minus what the neighbour needs. The constant is the space
+  // the shell already reserves for the canvas, so the two agree by construction.
+  const railMaxBounds = Math.max(RAIL_MIN, bounds.w - CANVAS_MIN_W);
+  const consoleMaxBounds = Math.max(CONSOLE_MIN, bounds.h - CANVAS_MIN_H);
 
   return (
     // relative is load-bearing, not decoration: Tailwind's `sr-only` is
@@ -302,21 +318,30 @@ export default function App() {
         {status}
       </div>
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <ControlPanel
-          onFile={(file, kind) => void onFile(file, kind)}
-          width={rail.size}
-          collapsed={rail.collapsed}
-        />
-        <PanelResizer
-          orientation="vertical"
-          label="control rail"
-          size={rail.size}
-          onResize={rail.resize}
-          onToggle={rail.toggle}
-          min={RAIL_MIN}
-          max={Math.max(RAIL_MIN, bounds.w - 420)}
-        />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 p-3">
+        {layout.railSide === "left" && (
+          <>
+            <ControlPanel
+              onFile={(file, kind) => void onFile(file, kind)}
+              width={rail.size}
+              collapsed={rail.collapsed}
+            />
+            <PanelResizer
+              side="left"
+              label="control rail"
+              size={rail.size}
+              onResize={rail.resize}
+              onToggle={rail.toggle}
+              min={RAIL_MIN}
+              max={railMaxBounds}
+            />
+          </>
+        )}
+        <div
+          className={cn(
+            "flex min-h-0 min-w-0 flex-1 gap-3 p-3",
+            layout.consoleSide === "right" ? "flex-row" : "flex-col",
+          )}
+        >
           <section className="relative flex min-h-32 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-canvas">
             {source || video ? (
               <>
@@ -394,17 +419,53 @@ export default function App() {
               </Empty>
             )}
           </section>
-          <PanelResizer
-            orientation="horizontal"
-            label="console"
-            size={consolePanel.size}
-            onResize={consolePanel.resize}
-            onToggle={consolePanel.toggle}
-            min={CONSOLE_MIN}
-            max={Math.max(CONSOLE_MIN, bounds.h - 260)}
-          />
-          <ToolsPanel tool={tool} onTool={setTool} height={consolePanel.size} />
+          {layout.consoleSide === "right" && (
+            <>
+              <PanelResizer
+                side="left"
+                label="console"
+                size={consolePanel.size}
+                onResize={consolePanel.resize}
+                onToggle={consolePanel.toggle}
+                min={CONSOLE_MIN}
+                max={consoleMaxBounds}
+              />
+              <ToolsPanel tool={tool} onTool={setTool} width={consolePanel.size} height="100%" />
+            </>
+          )}
+          {layout.consoleSide === "bottom" ? (
+            <>
+              <PanelResizer
+                side="top"
+                label="console"
+                size={consolePanel.size}
+                onResize={consolePanel.resize}
+                onToggle={consolePanel.toggle}
+                min={CONSOLE_MIN}
+                max={consoleMaxBounds}
+              />
+              <ToolsPanel tool={tool} onTool={setTool} height={consolePanel.size} />
+            </>
+          ) : null}
         </div>
+        {layout.railSide === "right" && (
+          <>
+            <PanelResizer
+              side="right"
+              label="control rail"
+              size={rail.size}
+              onResize={rail.resize}
+              onToggle={rail.toggle}
+              min={RAIL_MIN}
+              max={railMaxBounds}
+            />
+            <ControlPanel
+              onFile={(file, kind) => void onFile(file, kind)}
+              width={rail.size}
+              collapsed={rail.collapsed}
+            />
+          </>
+        )}
       </div>
       <Toaster />
     </main>
