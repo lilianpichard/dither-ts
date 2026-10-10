@@ -4,6 +4,7 @@
 
 import type { MediaKind } from "./kind";
 import { mediaKindOf } from "./kind";
+import type { Translate } from "../i18n";
 
 /** The store actions routing needs. Injected so this stays pure. */
 export interface MediaActions {
@@ -13,11 +14,11 @@ export interface MediaActions {
   loadVideo: (file: File) => void;
 }
 
-/** Why a file could not be routed, for the caller to report. */
-export function mediaRejection(file: File): string | null {
-  return mediaKindOf(file) === null
-    ? `${file.name || "That file"} is not an image or a video.`
-    : null;
+/** Why a file could not be routed, or null when it can be. */
+export function mediaRejection(file: File, t: Translate): string | null {
+  if (mediaKindOf(file) !== null) return null;
+  // A drop can carry a file with no name of its own, so name it by category.
+  return t("error.notMedia", { name: file.name || t("common.thatFile") });
 }
 
 /**

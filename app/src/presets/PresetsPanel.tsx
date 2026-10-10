@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTranslate } from "../i18n";
 import { renderImage } from "../worker/client";
 import { resolveColorMode, useApp } from "../store";
 import { requestOperations } from "../image/settings";
@@ -23,19 +24,28 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Copy, Download, Pencil, Star, Trash2 } from "lucide-react";
 import { useConsoleMeta } from "../components/consoleMeta";
+import type { Translate } from "../i18n";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-/** "just now" / "12m ago" / "3h ago" / "5d ago", matching the card's meta line. */
-export function describeAge(stamp: number | undefined, now: number = Date.now()): string {
-  if (stamp === undefined || !Number.isFinite(stamp)) return "Saved";
+/**
+ * How long ago a preset was saved. The word order and the plural differ per
+ * language, so each unit is its own message with ICU plurals: French has one
+ * form for 0 and 1 and another beyond, which a hand-rolled "3h ago" gets wrong.
+ */
+export function describeAge(
+  stamp: number | undefined,
+  t: Translate,
+  now: number = Date.now(),
+): string {
+  if (stamp === undefined || !Number.isFinite(stamp)) return t("presets.savedAt");
   const elapsed = Math.max(0, now - stamp);
-  if (elapsed < MINUTE) return "just now";
-  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)}m ago`;
-  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)}h ago`;
-  return `${Math.floor(elapsed / DAY)}d ago`;
+  if (elapsed < MINUTE) return t("presets.justNow");
+  if (elapsed < HOUR) return t("presets.agoMinutes", { count: Math.floor(elapsed / MINUTE) });
+  if (elapsed < DAY) return t("presets.agoHours", { count: Math.floor(elapsed / HOUR) });
+  return t("presets.agoDays", { count: Math.floor(elapsed / DAY) });
 }
 
 function summarize(warnings: string[]): string {
@@ -114,11 +124,20 @@ export default function PresetsPanel() {
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [thumbs, setThumbs] = useState<Map<string, string>>(new Map());
   const [deleting, setDeleting] = useState<string | null>(null);
+  const t = useTranslate();
   const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Storage refusing a write is a store fact, and the wording belongs to the
+  // catalogue, so the panel is where the two meet. Once per failure, never
+  // again until it recovers.
+  const persistFailed = usePresets((s) => s.persistFailed);
+  useEffect(() => {
+    if (persistFailed) toast.error(t("presets.storageFull"));
+  }, [persistFailed, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -169,7 +188,7 @@ export default function PresetsPanel() {
       // A failed import is the one case that deserves a persistent block: the
       // reason is long and the user has to read it to fix the file.
       setNotice({ ok: false, text: `Could not import ${name}: ${summarize(warnings)}` });
-      toast.error("Preset import failed");
+      toast.error(t("presets.importFailed"));
     } else if (warnings.length) {
       // Deduplicated and attributed, so a note says which preset it came from.
       toast.success(`Imported ${name}`, { description: summarize(warnings) });
@@ -182,7 +201,7 @@ export default function PresetsPanel() {
   function onInstallCatalog() {
     const { added } = installCatalog();
     if (added === 0) {
-      toast.info("Original presets are already in the gallery");
+      toast.info(t("presets.alreadyThere"));
       return;
     }
     // Every bundled preset is a legacy file, so its migration notes are expected
@@ -199,25 +218,25 @@ export default function PresetsPanel() {
         <div className="flex flex-wrap items-center gap-2">
           <Input
             value={name}
-            placeholder="Preset name"
-            aria-label="Preset name"
+            placeholder={t("presets.name")}
+            aria-label={t("presets.name")}
             className="w-37.5"
             onChange={(e) => setName(e.target.value)}
           />
           <Button
             onClick={() => {
-              saveCurrent(name.trim() || "Untitled", params);
+              saveCurrent(name.trim() || t("presets.untitled"), params);
               setName("");
-              toast.success("Preset saved");
+              toast.success(t("presets.saved"));
             }}
           >
-            Save current
+            {t("presets.saveCurrent")}
           </Button>
           <Button variant="secondary" onClick={() => importRef.current?.click()}>
             Import JSON
           </Button>
           <Button variant="secondary" onClick={onInstallCatalog}>
-            Add originals
+            {t("presets.addOriginals")}
           </Button>
           <Input
             ref={importRef}
@@ -229,15 +248,15 @@ export default function PresetsPanel() {
         </div>
         {notice && !notice.ok && (
           <Alert variant="destructive">
-            <AlertTitle>Import failed</AlertTitle>
+            <AlertTitle>{t("presets.importFailed")}</AlertTitle>
             <AlertDescription>{notice.text}</AlertDescription>
           </Alert>
         )}
         {sorted.length === 0 ? (
           <Empty>
             <EmptyHeader>
-              <EmptyTitle>No presets yet</EmptyTitle>
-              <EmptyDescription>Save the current settings to start the gallery.</EmptyDescription>
+              <EmptyTitle>{t("presets.empty")}</EmptyTitle>
+              <EmptyDescription>{t("presets.emptyHint")}</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
@@ -253,13 +272,13 @@ export default function PresetsPanel() {
               }[] = [
                 {
                   key: "favorite",
-                  label: "Favorite",
+                  label: t("presets.favorite"),
                   icon: <Star className={item.favorite ? "fill-current" : undefined} />,
                   onClick: () => toggleFavorite(item.id),
                 },
                 {
                   key: "export",
-                  label: "Export",
+                  label: t("presets.export"),
                   icon: <Download />,
                   onClick: () => {
                     const json = exportJson(item.id);
@@ -268,22 +287,22 @@ export default function PresetsPanel() {
                 },
                 {
                   key: "copy",
-                  label: "Duplicate",
+                  label: t("presets.duplicate"),
                   icon: <Copy />,
                   onClick: () => duplicate(item.id),
                 },
                 {
                   key: "rename",
-                  label: "Rename",
+                  label: t("presets.renameAction"),
                   icon: <Pencil />,
                   onClick: () => {
-                    const next = window.prompt("Rename preset", item.preset.name);
+                    const next = window.prompt(t("presets.rename"), item.preset.name);
                     if (next && next.trim()) rename(item.id, next.trim());
                   },
                 },
                 {
                   key: "delete",
-                  label: "Delete",
+                  label: t("presets.delete"),
                   icon: <Trash2 />,
                   onClick: () => setDeleting(item.id),
                 },
@@ -320,8 +339,8 @@ export default function PresetsPanel() {
                       {item.preset.params.pixelSize}
                     </p>
                     <p className="mt-0.5 truncate text-label text-muted-foreground uppercase">
-                      {item.favorite ? "Favorite · " : ""}
-                      {describeAge(item.createdAt)}
+                      {item.favorite ? `${t("presets.favorite")} · ` : ""}
+                      {describeAge(item.createdAt, t)}
                     </p>
                     <div className="mt-auto flex flex-wrap items-center gap-1 pt-2">
                       {actions.map((a) => (
@@ -343,7 +362,7 @@ export default function PresetsPanel() {
                       ))}
                     </div>
                   </div>
-                  <p className="sr-only">Click the card to apply</p>
+                  <p className="sr-only">{t("presets.apply")}</p>
                 </figure>
               );
             })}
@@ -353,7 +372,7 @@ export default function PresetsPanel() {
       <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
         <DialogContent className="gap-0 p-6 sm:max-w-105">
           <DialogHeader className="gap-0">
-            <DialogTitle>Delete preset?</DialogTitle>
+            <DialogTitle>{t("presets.deleteTitle")}</DialogTitle>
             <DialogDescription className="mt-3">
               This removes the preset permanently.
             </DialogDescription>
@@ -365,7 +384,7 @@ export default function PresetsPanel() {
           <DialogFooter className="mx-0 mb-0 gap-2 border-0 bg-transparent p-0">
             <DialogClose asChild>
               <Button variant="secondary" size="sm" className="w-20">
-                Cancel
+                {t("common.cancel")}
               </Button>
             </DialogClose>
             <Button
@@ -377,10 +396,10 @@ export default function PresetsPanel() {
                 setDeleting(null);
               }}
             >
-              Delete
+              {t("presets.delete")}
             </Button>
           </DialogFooter>
-          <p className="text-caption text-muted-foreground">Esc to close</p>
+          <p className="text-caption text-muted-foreground">{t("presets.esc")}</p>
         </DialogContent>
       </Dialog>
     </TooltipProvider>

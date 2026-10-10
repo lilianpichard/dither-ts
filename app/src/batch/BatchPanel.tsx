@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTranslate } from "../i18n";
 import { cancelAll, renderImage } from "../worker/client";
 import { stripKeys } from "../presets/store";
 import { resolveColorMode, useApp } from "../store";
@@ -36,6 +37,7 @@ function errorText(error: unknown): string {
 }
 
 export default function BatchPanel() {
+  const t = useTranslate();
   const [items, setItems] = useState<BatchItem[]>([]);
   const [running, setRunning] = useState(false);
   const [target, setTarget] = useState<OutputSink | null>(null);
@@ -174,12 +176,12 @@ export default function BatchPanel() {
       const picked = await openFiles("image", { multiple: true });
       if (picked && picked.length) await run(picked);
     } catch (error) {
-      toast.error(`Could not open those images: ${openFailure(error)}`);
+      toast.error(t("error.openMany", { reason: openFailure(error) }));
     }
   }
 
   const done = settledCount(items.map((it) => it.status));
-  const live = announceProgress({ label: "Batch", running, done, total: items.length });
+  const live = announceProgress({ label: t("batch.label"), running, done, total: items.length });
   const eta = running && done < items.length ? formatEta(etaMs) : "";
   useConsoleMeta("batch", running ? `${done}/${items.length}` : `${items.length} items`);
 
@@ -195,7 +197,7 @@ export default function BatchPanel() {
             type="file"
             accept="image/*"
             multiple
-            aria-label="Batch images"
+            aria-label={t("batch.pick")}
             className="w-full max-w-64"
             disabled={running}
             onChange={(e) => {
@@ -207,7 +209,7 @@ export default function BatchPanel() {
         )}
         {canPickDir && (
           <Button variant="secondary" disabled={running} onClick={() => void onChooseFolder()}>
-            Output folder
+            {t("batch.outputFolder")}
           </Button>
         )}
         {target && (
@@ -215,18 +217,20 @@ export default function BatchPanel() {
             variant="ghost"
             size="icon"
             disabled={running}
-            aria-label="Save each file separately instead"
+            aria-label={t("batch.savings")}
             onClick={() => setTarget(null)}
           >
             <X />
           </Button>
         )}
         <Badge aria-hidden variant="secondary">
-          {running ? `${done}/${items.length}${eta ? ` · ${eta}` : ""}` : `Saving to ${sink.label}`}
+          {running
+            ? `${done}/${items.length}${eta ? ` · ${eta}` : ""}`
+            : t("batch.savingTo", { target: sink.label })}
         </Badge>
         {running && (
           <Button variant="destructive" onClick={cancel}>
-            Cancel
+            {t("common.cancel")}
           </Button>
         )}
       </div>
@@ -235,7 +239,7 @@ export default function BatchPanel() {
       </div>
       {items.length > 0 && (
         <>
-          <Progress aria-label="Batch progress" value={done} max={items.length} />
+          <Progress aria-label={t("batch.progress")} value={done} max={items.length} />
           <ul aria-busy={running} className="flex flex-col gap-1">
             {items.map((it, i) => (
               <li key={i} className="flex items-center gap-2">
@@ -262,7 +266,7 @@ export default function BatchPanel() {
       {items.length === 0 && (
         <Empty>
           <EmptyHeader>
-            <EmptyTitle>No batch yet</EmptyTitle>
+            <EmptyTitle>{t("batch.empty")}</EmptyTitle>
             <EmptyDescription>
               Select multiple images to render each with the current settings.
             </EmptyDescription>

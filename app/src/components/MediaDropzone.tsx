@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { canOpenFiles } from "@/desktop/bridge";
 import { openFailure, openMedia } from "@/desktop/files";
 import { MEDIA_ACCEPT, mediaKindOf, type MediaKind } from "@/media/kind";
+import { useTranslate } from "@/i18n";
 import { cn } from "@/lib/utils";
 
 interface MediaDropzoneProps {
@@ -14,6 +15,7 @@ interface MediaDropzoneProps {
   fileName?: string;
   disabled?: boolean;
   busy?: boolean;
+  /** Overrides for the default busy, drop and hint wording. */
   busyLabel?: string;
   label?: string;
   hint?: string;
@@ -35,12 +37,13 @@ export function MediaDropzone({
   fileName,
   disabled = false,
   busy = false,
-  busyLabel = "Loading…",
-  label = "Drop image or video",
-  hint = "Click or drop a file",
+  busyLabel,
+  label,
+  hint,
   leading,
   className,
 }: MediaDropzoneProps) {
+  const t = useTranslate();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const dragCount = React.useRef(0);
   const [dragging, setDragging] = React.useState(false);
@@ -54,7 +57,7 @@ export function MediaDropzone({
     if (kind === null) {
       // The picker filters on accept, but a drop does not, and a silent no-op
       // looks like the app is broken.
-      toast.error(`${file.name || "That file"} is not an image or a video.`);
+      toast.error(t("error.notMedia", { name: file.name || "" }));
       return;
     }
     onFile(file, kind);
@@ -65,7 +68,7 @@ export function MediaDropzone({
       const file = await openMedia();
       if (file) handleFile(file);
     } catch (error) {
-      toast.error(`Could not open that file: ${openFailure(error)}`);
+      toast.error(t("error.open", { reason: openFailure(error) }));
     }
   }
 
@@ -100,7 +103,7 @@ export function MediaDropzone({
           if (native) void pick();
           else inputRef.current?.click();
         }}
-        aria-label={busy ? busyLabel : label}
+        aria-label={busy ? (busyLabel ?? t("rail.loading")) : (label ?? t("rail.dropMedia"))}
         className={cn(
           "flex h-11.5 w-full cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-raised px-2.5 text-left transition-colors",
           dragging ? "border-ring bg-accent" : "hover:bg-accent",
@@ -122,11 +125,15 @@ export function MediaDropzone({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-body font-bold text-foreground">
-            {busy ? busyLabel : dragging ? "Drop the file" : (fileName ?? label)}
+            {busy
+              ? (busyLabel ?? t("rail.loading"))
+              : dragging
+                ? t("rail.dropping")
+                : (fileName ?? label ?? t("rail.dropMedia"))}
           </span>
           {!busy && (
             <span className="block truncate text-label text-muted-foreground">
-              {fileName ? "Click or drop to replace" : hint}
+              {fileName ? t("rail.replace") : (hint ?? t("rail.clickOrDrop"))}
             </span>
           )}
         </span>

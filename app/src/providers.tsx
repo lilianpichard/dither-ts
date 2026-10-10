@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ThemeProvider } from "next-themes";
+import { I18nProvider } from "./i18n";
 
 /** Client-only shell: the theme class lands on <html> before first paint. */
 export default function Providers({ children }: { children: ReactNode }) {
@@ -12,7 +13,7 @@ export default function Providers({ children }: { children: ReactNode }) {
       enableColorScheme
       storageKey="dither-ts.theme"
     >
-      {children}
+      <I18nProvider>{children}</I18nProvider>
     </ThemeProvider>
   );
 }

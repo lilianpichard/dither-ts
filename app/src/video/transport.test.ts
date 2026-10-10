@@ -9,6 +9,18 @@ import {
   targetMoved,
   transportStatus,
 } from "./transport";
+import { createIntl } from "react-intl";
+import { MESSAGES, type Locale } from "../i18n/messages";
+import type { Translate } from "../i18n";
+
+/** A real `t`, so the ICU number formatting the messages rely on runs too. */
+function tFor(locale: Locale): Translate {
+  const intl = createIntl({ locale, defaultLocale: "en", messages: MESSAGES[locale] });
+  return ((id: string, values?: Record<string, string | number>) =>
+    String(intl.formatMessage({ id }, values))) as unknown as Translate;
+}
+
+const t = tFor("en");
 
 const FULL = { playing: true, time: 1.234, duration: 4, loop: false };
 
@@ -106,21 +118,21 @@ describe("looping past the end", () => {
 
 describe("transport status line", () => {
   it("reports playing state with both times", () => {
-    expect(transportStatus(FULL)).toBe("Playing 1.23s of 4.00s");
+    expect(transportStatus(FULL, t)).toBe("Playing 1.23s of 4.00s");
   });
 
   it("mentions looping only while it is on", () => {
-    expect(transportStatus({ ...FULL, loop: true })).toContain("looping");
-    expect(transportStatus({ ...FULL, playing: false })).not.toContain("looping");
+    expect(transportStatus({ ...FULL, loop: true }, t)).toContain("looping");
+    expect(transportStatus({ ...FULL, playing: false }, t)).not.toContain("looping");
   });
 
   it("distinguishes paused from stopped at the end", () => {
-    expect(transportStatus({ ...FULL, playing: false })).toBe("Paused at 1.23s of 4.00s");
-    expect(transportStatus({ ...FULL, playing: false, time: 4 })).toContain("at the end");
+    expect(transportStatus({ ...FULL, playing: false }, t)).toBe("Paused at 1.23s of 4.00s");
+    expect(transportStatus({ ...FULL, playing: false, time: 4 }, t)).toContain("at the end");
   });
 
   it("says so when there is nothing loaded", () => {
-    expect(transportStatus({ playing: false, time: 0, duration: 0, loop: false })).toBe(
+    expect(transportStatus({ playing: false, time: 0, duration: 0, loop: false }, t)).toBe(
       "No video loaded",
     );
   });

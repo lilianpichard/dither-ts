@@ -8,6 +8,7 @@ import PaletteEditor from "../palette/PaletteEditor";
 import { MediaDropzone } from "./MediaDropzone";
 import OperationsPanel from "./OperationsPanel";
 import type { MediaKind } from "@/media/kind";
+import { useTranslate } from "@/i18n";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import {
@@ -19,11 +20,14 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 
-/** The three colour modes: greyscale, quantise to a palette, or keep the photo's own. */
+/**
+ * The three colour modes: greyscale, quantise to a palette, or keep the photo's
+ * own. Only the ids live here; the labels come from the catalogue.
+ */
 const COLOR_MODES = [
-  { id: "off", label: "Off" },
-  { id: "palette", label: "Palette" },
-  { id: "original", label: "Original" },
+  { id: "off", key: "rail.colorOff" },
+  { id: "palette", key: "rail.colorPalette" },
+  { id: "original", key: "rail.colorOriginal" },
 ] as const;
 
 /** Micro-label above a control; "SOURCE" is the one amber label in the rail. */
@@ -124,12 +128,11 @@ export default function ControlPanel({
   const rendering = useApp((s) => s.rendering);
   const previewScaled = useApp((s) => s.previewScaled);
   const setParams = useApp((s) => s.setParams);
-  const status = describeRenderStatus({
-    hasSource: source !== null,
-    rendering,
-    ms: result?.ms ?? null,
-    previewScaled,
-  });
+  const t = useTranslate();
+  const status = describeRenderStatus(
+    { hasSource: source !== null, rendering, ms: result?.ms ?? null, previewScaled },
+    t,
+  );
   const methodIndex = METHOD_NAMES.indexOf(params.method) + 1;
   // A stored preset may predate the mode, and `color: false` wins over either.
   const colorMode = !params.color ? "off" : resolveColorMode(params);
@@ -138,7 +141,7 @@ export default function ControlPanel({
   function onMethodChange(method: DitherMethod): void {
     if (params.color && !supportsColor(method)) {
       setParams({ method, color: false });
-      toast.info(`${method} is greyscale only, so colour was turned off.`);
+      toast.info(t("common.greyscaleOnly", { method }));
       return;
     }
     setParams({ method });
@@ -148,7 +151,7 @@ export default function ControlPanel({
     if (mode !== "off" && !supportsColor(params.method)) {
       // The other direction of the same clash
       setParams({ method: "Floyd-Steinberg", color: true, colorMode: mode });
-      toast.info(`${params.method} is greyscale only - switched to Floyd-Steinberg.`);
+      toast.info(t("common.greyscaleFallback", { method: params.method }));
       return;
     }
     setParams({
@@ -173,15 +176,15 @@ export default function ControlPanel({
         collapsed && "hidden",
       )}
     >
-      <Field label="Source" accent>
+      <Field label={t("rail.source")} accent>
         <SourceChip onFile={onFile} />
       </Field>
-      <Field label="Method">
+      <Field label={t("rail.method")}>
         <Select
           value={params.method}
           onValueChange={(value) => onMethodChange(value as DitherMethod)}
         >
-          <SelectTrigger id="ctl-method" aria-label="Method">
+          <SelectTrigger id="ctl-method" aria-label={t("rail.method")}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -193,10 +196,10 @@ export default function ControlPanel({
           </SelectContent>
         </Select>
       </Field>
-      <Field label="Color">
+      <Field label={t("rail.color")}>
         <div
           role="radiogroup"
-          aria-label="Color mode"
+          aria-label={t("rail.colorMode")}
           className="flex gap-1 rounded-lg border border-border bg-raised p-0.5"
           // A radiogroup is expected to move and select with the arrow keys,
           // with only the checked radio in the tab order. Without this the
@@ -234,21 +237,21 @@ export default function ControlPanel({
                     : "text-muted-foreground hover:bg-accent hover:text-foreground",
                 )}
               >
-                {m.label}
+                {t(m.key)}
               </button>
             );
           })}
         </div>
       </Field>
       {params.color && colorMode === "palette" && (
-        <Field label="Palette">
+        <Field label={t("rail.palette")}>
           <Select
             value={typeof params.palette === "string" ? params.palette : "custom"}
             onValueChange={(v) => {
               if (v !== "custom") setParams({ palette: v });
             }}
           >
-            <SelectTrigger id="ctl-palette" aria-label="Palette">
+            <SelectTrigger id="ctl-palette" aria-label={t("rail.palette")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -259,7 +262,7 @@ export default function ControlPanel({
               ))}
               {typeof params.palette !== "string" && (
                 <SelectItem value="custom" disabled>
-                  Custom
+                  {t("rail.customPalette")}
                 </SelectItem>
               )}
             </SelectContent>
@@ -268,9 +271,9 @@ export default function ControlPanel({
         </Field>
       )}
       {!params.color && (
-        <Field label={`Threshold ${params.threshold}`}>
+        <Field label={t("rail.threshold", { value: params.threshold })}>
           <Slider
-            aria-label="Threshold"
+            aria-label={t("rail.threshold", { value: params.threshold })}
             min={1}
             max={254}
             value={[params.threshold]}
@@ -278,9 +281,9 @@ export default function ControlPanel({
           />
         </Field>
       )}
-      <Field label={`Pixel size ${params.pixelSize}`}>
+      <Field label={t("rail.pixelSize", { value: params.pixelSize })}>
         <Slider
-          aria-label="Pixel size"
+          aria-label={t("rail.pixelSize", { value: params.pixelSize })}
           min={1}
           max={8}
           step={1}
@@ -295,7 +298,7 @@ export default function ControlPanel({
       <p className="text-label text-muted-foreground">Method {methodIndex}/24</p>
       <p className="text-label text-muted-foreground">Color {params.color ? "on" : "off"}</p>
       <div className="mt-1 border-t border-border pt-3">
-        <Label className="mb-2">Adjust</Label>
+        <Label className="mb-2">{t("rail.adjust")}</Label>
         <OperationsPanel />
       </div>
     </aside>

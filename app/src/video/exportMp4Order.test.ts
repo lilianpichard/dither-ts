@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createChunkReorderer } from "./exportMp4";
 
 interface Stored {
@@ -30,7 +30,7 @@ function recordingMuxer() {
   };
 }
 
-function chunk(timestamp: number, meta?: EncodedVideoChunkMetadata): EncodedVideoChunk {
+function chunk(timestamp: number): EncodedVideoChunk {
   const stored: Stored = { timestamp };
   return {
     timestamp,

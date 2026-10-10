@@ -1,3 +1,5 @@
+import type { Translate } from "../i18n";
+
 // Honest report on whether this runtime could capture a video's audio at all.
 // The MP4 and GIF writers are video-only, so nothing here claims audio is
 // preserved: the probe explains whether the capture APIs exist so the UI can
@@ -45,9 +47,7 @@ export function probeAudioCapture(env: AudioCapabilityEnv = browserAudioEnv()): 
  * One line stating what the export actually contains. Never implies audio
  * survives, because the writers never mux an audio track.
  */
-export function describeAudioStatus(capability: AudioCapability): string {
-  const output = "Video-only export: MP4 and GIF drop the source audio.";
-  if (capability.supported)
-    return `${output} Capture APIs are present, but no audio track is muxed.`;
-  return `${output} Audio capture unavailable here (missing ${capability.missing.join(", ")}).`;
+export function describeAudioStatus(capability: AudioCapability, t: Translate): string {
+  if (capability.supported) return t("timeline.audioCapturable");
+  return t("timeline.audioMissing", { missing: capability.missing.join(", ") });
 }

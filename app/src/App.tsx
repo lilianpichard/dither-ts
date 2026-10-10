@@ -17,6 +17,8 @@ import { SLOW_OPERATION_MS, warnIfSlow } from "./lib/slowOperation";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { MEDIA_ACCEPT, mediaKindOf, type MediaKind } from "./media/kind";
 import { cappedPixelSize } from "./video/pixelSize";
+import { useTranslate } from "./i18n";
+import { useGlobalErrors } from "./ErrorReporting";
 import { mediaRejection, routeMedia } from "./media/route";
 import { Button } from "@/components/ui/button";
 import {
@@ -62,6 +64,8 @@ async function fileToSource(file: File) {
 }
 
 export default function App() {
+  useGlobalErrors();
+  const t = useTranslate();
   const source = useApp((state) => state.source);
   const params = useApp((state) => state.params);
   const effects = useApp((state) => state.effects);
@@ -99,13 +103,16 @@ export default function App() {
   }, []);
   const status = useMemo(
     () =>
-      describeRenderStatus({
-        hasSource: source !== null,
-        rendering,
-        ms: result?.ms ?? null,
-        previewScaled,
-      }),
-    [source, rendering, result, previewScaled],
+      describeRenderStatus(
+        {
+          hasSource: source !== null,
+          rendering,
+          ms: result?.ms ?? null,
+          previewScaled,
+        },
+        t,
+      ),
+    [source, rendering, result, previewScaled, t],
   );
 
   /**
@@ -126,7 +133,9 @@ export default function App() {
     } catch (error) {
       if (sequence === fileSequence.current) {
         toast.error(
-          `Could not load image: ${error instanceof Error ? error.message : String(error)}`,
+          t("error.loadImage", {
+            reason: error instanceof Error ? error.message : String(error),
+          }),
         );
       }
     }
@@ -143,10 +152,7 @@ export default function App() {
       if (controller.signal.aborted) return;
       // Armed per job and disarmed on the way out, so a slow render only ever
       // produces one notice and a fast one produces none.
-      const cancelSlowWarning = warnIfSlow(
-        SLOW_OPERATION_MS,
-        "Large image: dithering at full quality can take a while.",
-      );
+      const cancelSlowWarning = warnIfSlow(SLOW_OPERATION_MS, t("error.slowLarge"));
       try {
         let width = source.width;
         let height = source.height;
@@ -235,7 +241,9 @@ export default function App() {
         }
         setResult(null);
         setPreviewScaled(false);
-        toast.error(`Render failed: ${error instanceof Error ? error.message : String(error)}`);
+        toast.error(
+          t("error.render", { reason: error instanceof Error ? error.message : String(error) }),
+        );
       } finally {
         cancelSlowWarning();
       }
@@ -330,7 +338,7 @@ export default function App() {
                     compare={video ? video.compare : source}
                     geometry={video ? video.geometry : source}
                     resetKey={video ? video.clipKey : source}
-                    label={video ? "Dithered video frame preview" : "Dithered image preview"}
+                    label={video ? t("preview.video") : t("preview.image")}
                   />
                 </ErrorBoundary>
                 {meta ? (
@@ -347,17 +355,15 @@ export default function App() {
                   // until the new one is ready to paint over it.
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground">
                     <AnalyzingImage className="size-16" />
-                    <p className="text-label uppercase">Processing</p>
+                    <p className="text-label uppercase">{t("status.rendering")}</p>
                   </div>
                 ) : null}
               </>
             ) : (
               <Empty className="h-full">
                 <EmptyHeader>
-                  <EmptyTitle className="text-display uppercase">Drop media</EmptyTitle>
-                  <EmptyDescription>
-                    Choose an image or a video to start dithering.
-                  </EmptyDescription>
+                  <EmptyTitle className="text-display uppercase">{t("empty.canvas")}</EmptyTitle>
+                  <EmptyDescription>{t("empty.canvasHint")}</EmptyDescription>
                 </EmptyHeader>
                 <EmptyContent>
                   {/* Board C01: 262x42 raised button, label 10px/700. */}
@@ -367,7 +373,7 @@ export default function App() {
                     className="w-65.5"
                     onClick={() => pickerRef.current?.click()}
                   >
-                    Choose an image
+                    {t("rail.chooseImage")}
                   </Button>
                   <input
                     ref={pickerRef}
@@ -380,7 +386,7 @@ export default function App() {
                       const next = e.target.files?.[0];
                       const kind = next ? mediaKindOf(next) : null;
                       if (next && kind) void onFile(next, kind);
-                      else if (next) toast.error(mediaRejection(next));
+                      else if (next) toast.error(mediaRejection(next, t));
                       e.currentTarget.value = "";
                     }}
                   />

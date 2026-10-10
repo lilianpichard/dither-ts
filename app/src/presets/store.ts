@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { toast } from "sonner";
 import { parsePresetJson, serializePreset, type Preset, type PresetEffect } from "./schema";
 import { PRESET_VERSION } from "./version";
 import { loadCatalog } from "./catalog";
@@ -23,6 +22,8 @@ export interface ImportResult {
 
 interface PresetStore {
   items: SavedPreset[];
+  /** True after storage refused a write, so the panel can say so once. */
+  persistFailed: boolean;
   load: () => void;
   saveCurrent: (name: string, params: DitherParams) => void;
   remove: (id: string) => void;
@@ -47,21 +48,23 @@ function readCreatedAt(entry: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
-// A silent quota failure looks like a save that worked right up to the next
-// reload, so it is reported once and again only after it recovers.
-let persistComplained = false;
+/**
+ * Whether the last write to storage failed. A store is not a component, so it
+ * cannot translate or toast: it records the failure and the panel says so,
+ * once, in the language the user picked.
+ */
+let persistFailed = false;
 
-function persist(items: SavedPreset[]): void {
+/** True the first time storage refuses a write, and again after it recovers. */
+function persist(items: SavedPreset[]): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    persistComplained = false;
+    persistFailed = false;
+    return false;
   } catch {
-    // Storage full or unavailable: presets stay in memory only.
-    if (persistComplained) return;
-    persistComplained = true;
-    toast.error(
-      "Presets could not be saved. Browser storage is full or blocked, so they last for this session only.",
-    );
+    const first = !persistFailed;
+    persistFailed = true;
+    return first;
   }
 }
 
@@ -125,6 +128,7 @@ export function stripKeys(effects: StackedEffect[]): PresetEffect[] {
 
 export const usePresets = create<PresetStore>()((set, get) => ({
   items: [],
+  persistFailed: false,
   load: () => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -162,25 +166,21 @@ export const usePresets = create<PresetStore>()((set, get) => ({
         createdAt: Date.now(),
       },
     ];
-    persist(items);
-    set({ items });
+    set({ items, persistFailed: persist(items) });
   },
   remove: (id) => {
     const items = get().items.filter((i) => i.id !== id);
-    persist(items);
-    set({ items });
+    set({ items, persistFailed: persist(items) });
   },
   rename: (id, name) => {
     const items = get().items.map((i) =>
       i.id === id ? { ...i, preset: { ...i.preset, name } } : i,
     );
-    persist(items);
-    set({ items });
+    set({ items, persistFailed: persist(items) });
   },
   toggleFavorite: (id) => {
     const items = get().items.map((i) => (i.id === id ? { ...i, favorite: !i.favorite } : i));
-    persist(items);
-    set({ items });
+    set({ items, persistFailed: persist(items) });
   },
   duplicate: (id) => {
     const found = get().items.find((i) => i.id === id);
@@ -194,15 +194,14 @@ export const usePresets = create<PresetStore>()((set, get) => ({
         createdAt: Date.now(),
       },
     ];
-    persist(items);
-    set({ items });
+    set({ items, persistFailed: persist(items) });
   },
   importJson: (text, nameHint) => {
     const { preset, warnings } = parsePresetJson(text, nameHint);
     if (!preset) return { added: 0, warnings };
     const items = [...get().items, { id: uid(), favorite: false, preset, createdAt: Date.now() }];
-    persist(items);
-    set({ items });
+    const failed = persist(items);
+    set({ items, persistFailed: failed });
     return { added: 1, warnings };
   },
   installCatalog: () => {
@@ -217,8 +216,7 @@ export const usePresets = create<PresetStore>()((set, get) => ({
     }
     if (fresh.length > 0) {
       const items = [...get().items, ...fresh];
-      persist(items);
-      set({ items });
+      set({ items, persistFailed: persist(items) });
     }
     return { added: fresh.length, warnings };
   },

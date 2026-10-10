@@ -2,6 +2,8 @@
 // when the dithered preview is due for a refresh. Pure arithmetic over clip
 // metadata so the UI never holds a transition rule of its own.
 
+import type { Translate } from "../i18n";
+
 /** Cadence floor for dithered preview refreshes while playing. */
 export const PREVIEW_INTERVAL_MS = 120;
 
@@ -66,23 +68,28 @@ export function advancePlayback(
 }
 
 /** One line for the visible badge and the polite live region. */
-export function transportStatus({
-  playing,
-  time,
-  duration,
-  loop,
-}: {
-  playing: boolean;
-  time: number;
-  duration: number;
-  loop: boolean;
-}): string {
-  const at = clampTime(time, duration).toFixed(2);
-  const total = safeDuration(duration).toFixed(2);
-  if (playing) return `Playing ${at}s of ${total}s${loop ? " · looping" : ""}`;
-  if (!Number.isFinite(time) || safeDuration(duration) === 0) return "No video loaded";
-  if (isAtEnd(time, duration)) return `Stopped at the end · ${at}s of ${total}s`;
-  return `Paused at ${at}s of ${total}s${loop ? " · looping" : ""}`;
+export function transportStatus(
+  {
+    playing,
+    time,
+    duration,
+    loop,
+  }: {
+    playing: boolean;
+    time: number;
+    duration: number;
+    loop: boolean;
+  },
+  t: Translate,
+): string {
+  const at = clampTime(time, duration);
+  const total = safeDuration(duration);
+  const values = { at, total };
+  const suffix = loop ? t("timeline.looping") : "";
+  if (playing) return t("timeline.playing", values) + suffix;
+  if (!Number.isFinite(time) || total === 0) return t("timeline.empty");
+  if (isAtEnd(time, duration)) return t("timeline.stoppedEnd", values);
+  return t("timeline.paused", values) + suffix;
 }
 
 /**

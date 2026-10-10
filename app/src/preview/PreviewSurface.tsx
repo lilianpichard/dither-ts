@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, Maximize, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "cn";
+import { useTranslate } from "../i18n";
 import { frameToCanvas, type Frame } from "./frame";
 import { fitView, type View } from "./canvasFit";
 
@@ -79,6 +80,7 @@ export default function PreviewSurface({
   resetKey,
   label,
 }: PreviewSurfaceProps) {
+  const t = useTranslate();
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -232,24 +234,24 @@ export default function PreviewSurface({
         onDoubleClick={fit}
       />
       <div className="absolute top-2 left-2 flex items-center gap-0.5 rounded-lg border border-border bg-raised/90 p-0.5 backdrop-blur-sm">
-        <ZoomButton label="Zoom out" hint="-" onClick={() => zoomAt(1 / 1.25)}>
+        <ZoomButton label={t("preview.zoomOut")} hint="-" onClick={() => zoomAt(1 / 1.25)}>
           <ZoomOut />
         </ZoomButton>
         <span className="w-9 text-center text-caption text-muted-foreground tabular-nums">
           {Math.round(view.scale * 100)}%
         </span>
-        <ZoomButton label="Zoom in" hint="+" onClick={() => zoomAt(1.25)}>
+        <ZoomButton label={t("preview.zoomIn")} hint="+" onClick={() => zoomAt(1.25)}>
           <ZoomIn />
         </ZoomButton>
-        <ZoomButton label="Fit to view" hint="0" onClick={fit}>
+        <ZoomButton label={t("preview.fit")} hint="0" onClick={fit}>
           <Maximize />
         </ZoomButton>
         <button
           type="button"
-          aria-label="Compare with original"
+          aria-label={t("preview.compare")}
           aria-pressed={comparing && canCompare}
           disabled={!canCompare}
-          title={canCompare ? "Hold to compare with original (C)" : "Nothing to compare against"}
+          title={canCompare ? t("preview.compareHold") : t("preview.compareNothing")}
           onPointerDown={() => canCompare && setComparing(true)}
           onPointerUp={() => setComparing(false)}
           onPointerLeave={() => setComparing(false)}

@@ -15,6 +15,7 @@ import { getPool } from "../worker/pool";
 import { stripKeys } from "../presets/store";
 import { resolveColorMode, useApp } from "../store";
 import { exportPixelSize, previewPixelSize } from "./pixelSize";
+import { useTranslate } from "../i18n";
 import type { VideoPreview } from "../store";
 import type { Frame } from "../preview/frame";
 import { warnIfSlow } from "../lib/slowOperation";
@@ -482,10 +483,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
     setError("");
     // Armed here so a quick export never nags, and cancelled in the finally so a
     // fast one never warns after the fact.
-    const cancelSlowWarning = warnIfSlow(
-      SLOW_EXPORT_WARNING_MS,
-      "Exporting at full quality: a long clip can take a while.",
-    );
+    const cancelSlowWarning = warnIfSlow(SLOW_EXPORT_WARNING_MS, t("error.slowExport"));
     try {
       const snapshot = { ...params };
       const fx = stripKeys(useApp.getState().effects);
@@ -618,7 +616,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
         return;
       }
       setPhase("done");
-      toast.success(`Exported ${stem}.dither.${kind}`);
+      toast.success(t("timeline.exported", { name: `${stem}.dither.${kind}` }));
     } catch (error) {
       if (isAbortError(error)) {
         pool?.invalidate();
@@ -637,13 +635,6 @@ export default function Timeline({ active = true }: { active?: boolean }) {
     }
   }
 
-  const live = announceProgress({
-    label: "Video export",
-    running: working,
-    done: shown,
-    total: 100,
-  });
-
   // The working badge shares previewSize with the preview path, so the label
   // cannot drift from the size actually rendered.
   const workingDim = clip ? previewSize(clip.info, params.method) : null;
@@ -654,8 +645,15 @@ export default function Timeline({ active = true }: { active?: boolean }) {
         planMaxDim(params.method, fullRes ? MAX_FULL_RES_DIM : undefined),
       )
     : null;
-  const transportLine = transportStatus({ playing, time, duration, loop });
-  useConsoleMeta("timeline", clip ? "Clip loaded" : "No clip");
+  const t = useTranslate();
+  const live = announceProgress({
+    label: t("timeline.exportLabel"),
+    running: working,
+    done: shown,
+    total: 100,
+  });
+  const transportLine = transportStatus({ playing, time, duration, loop }, t);
+  useConsoleMeta("timeline", clip ? t("timeline.clipLoaded") : t("timeline.noClip"));
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -665,15 +663,19 @@ export default function Timeline({ active = true }: { active?: boolean }) {
             an image and a clip both be loaded at once. */}
         {clip && (
           <Badge variant="secondary">
-            {clip.info.width}×{clip.info.height}, {clip.info.duration.toFixed(1)}s
+            {t("timeline.dims", {
+              width: clip.info.width,
+              height: clip.info.height,
+              duration: clip.info.duration,
+            })}
           </Badge>
         )}
       </div>
       {!clip ? (
         <Empty>
           <EmptyHeader>
-            <EmptyTitle>No video loaded</EmptyTitle>
-            <EmptyDescription>Choose a video file to scrub and export frames.</EmptyDescription>
+            <EmptyTitle>{t("timeline.empty")}</EmptyTitle>
+            <EmptyDescription>{t("timeline.emptyHint")}</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
@@ -692,7 +694,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
               />
             </div>
             <div className="flex items-center gap-2">
-              <Label htmlFor="range-in">In</Label>
+              <Label htmlFor="range-in">{t("timeline.in")}</Label>
               <Input
                 id="range-in"
                 type="number"
@@ -707,7 +709,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
               />
             </div>
             <div className="flex items-center gap-2">
-              <Label htmlFor="range-out">Out</Label>
+              <Label htmlFor="range-out">{t("timeline.out")}</Label>
               <Input
                 id="range-out"
                 type="number"
@@ -722,7 +724,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
               />
             </div>
             <div className="flex items-center gap-2">
-              <Label htmlFor="fps">FPS</Label>
+              <Label htmlFor="fps">{t("timeline.fps")}</Label>
               <Select value={String(fps)} onValueChange={(v) => setFps(Number(v))}>
                 <SelectTrigger id="fps" className="w-20">
                   <SelectValue />
@@ -738,13 +740,13 @@ export default function Timeline({ active = true }: { active?: boolean }) {
             </div>
             <div className="flex items-center gap-2">
               <Switch id="temporal" checked={temporal} onCheckedChange={setTemporal} />
-              <Label htmlFor="temporal">Temporal noise</Label>
+              <Label htmlFor="temporal">{t("timeline.temporal")}</Label>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <Switch id="full-res" checked={fullRes} onCheckedChange={setFullRes} />
-              <Label htmlFor="full-res">Full resolution</Label>
+              <Label htmlFor="full-res">{t("timeline.fullRes")}</Label>
             </div>
             {exportDim && workingDim && (
               <Badge variant="secondary">
@@ -757,7 +759,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
             <Button
               variant="secondary"
               size="icon-sm"
-              aria-label="Jump to start"
+              aria-label={t("timeline.jumpStart")}
               disabled={working}
               onClick={() => onJump(-1)}
             >
@@ -766,7 +768,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
             <Button
               variant="secondary"
               size="icon-sm"
-              aria-label="Step back one frame"
+              aria-label={t("timeline.stepBack")}
               disabled={working}
               onClick={() => onStep(-1)}
             >
@@ -775,7 +777,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
             <Button
               variant="secondary"
               size="icon-sm"
-              aria-label={playing ? "Pause" : "Play"}
+              aria-label={playing ? t("common.pause") : t("common.play")}
               disabled={working}
               onClick={() => void togglePlay()}
             >
@@ -784,7 +786,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
             <Button
               variant="secondary"
               size="icon-sm"
-              aria-label="Stop and rewind"
+              aria-label={t("timeline.stop")}
               disabled={working}
               onClick={stopPlayback}
             >
@@ -793,7 +795,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
             <Button
               variant="secondary"
               size="icon-sm"
-              aria-label="Step forward one frame"
+              aria-label={t("timeline.stepForward")}
               disabled={working}
               onClick={() => onStep(1)}
             >
@@ -802,7 +804,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
             <Button
               variant="secondary"
               size="icon-sm"
-              aria-label="Jump to end"
+              aria-label={t("timeline.jumpEnd")}
               disabled={working}
               onClick={() => onJump(1)}
             >
@@ -811,7 +813,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
             <Button
               variant="secondary"
               size="icon-sm"
-              aria-label="Loop playback"
+              aria-label={t("timeline.loop")}
               aria-pressed={loop}
               disabled={working}
               onClick={() => setLoop((current) => !current)}
@@ -820,27 +822,27 @@ export default function Timeline({ active = true }: { active?: boolean }) {
             </Button>
             <Badge variant="secondary">{transportLine}</Badge>
           </div>
-          <p className="text-label text-muted-foreground">{describeAudioStatus(audio)}</p>
+          <p className="text-label text-muted-foreground">{describeAudioStatus(audio, t)}</p>
           <div className="flex flex-wrap items-center gap-3">
             <Button
               disabled={working || !canExportMp4()}
-              title={canExportMp4() ? "" : "WebCodecs unavailable"}
+              title={canExportMp4() ? undefined : t("timeline.noWebcodecs")}
               onClick={() => void runExport("mp4")}
             >
-              Export MP4
+              {t("timeline.exportMp4")}
             </Button>
             <Button disabled={working} variant="secondary" onClick={() => void runExport("gif")}>
-              Export GIF
+              {t("timeline.exportGif")}
             </Button>
             {working && (
               <Button variant="outline" onClick={cancelExport}>
-                Cancel
+                {t("common.cancel")}
               </Button>
             )}
             {working && totalCount > 0 && (
               <div aria-busy className="flex flex-wrap items-center gap-3">
                 <Progress
-                  aria-label="Video export progress"
+                  aria-label={t("timeline.progress")}
                   value={Math.min(100, shown)}
                   max={100}
                   className="w-48"
@@ -862,7 +864,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
           </div>
           {error && (
             <Alert variant="destructive">
-              <AlertTitle>Export failed</AlertTitle>
+              <AlertTitle>{t("timeline.exportFailed")}</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}

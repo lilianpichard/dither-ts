@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTranslate } from "../i18n";
 import { renderImage } from "../worker/client";
 import { DEFAULT_CHARSET, exportTXT } from "../../../src/ascii.js";
 import { useApp } from "../store";
@@ -47,6 +48,7 @@ function rgbaToGray(rgba: Uint8ClampedArray): Uint8Array {
 }
 
 export default function ExportPanel() {
+  const t = useTranslate();
   const source = useApp((s) => s.source);
   const params = useApp((s) => s.params);
   const effects = useApp((s) => s.effects);
@@ -64,7 +66,7 @@ export default function ExportPanel() {
   const exportAbort = useRef<AbortController | null>(null);
   const exportReady = canExport(result, rendering, exporting);
   const live = announceProgress({
-    label: "Export",
+    label: t("export.export"),
     running: exporting,
     done: exportProgress,
     total: 100,
@@ -151,7 +153,7 @@ export default function ExportPanel() {
   // because DEFAULT_CHARSET comes from the same module, so splitting it would do
   // nothing.
   function svg() {
-    return runExport("Exported dither.svg", async (cur) => {
+    return runExport(t("export.svg"), async (cur) => {
       const { exportSVG } = await import("../../../src/vector.js");
       return saveText(
         exportSVG(cur.data, cur.width, cur.height, { black }),
@@ -162,7 +164,7 @@ export default function ExportPanel() {
   }
 
   function txt() {
-    return runExport("Exported dither.txt", (cur) =>
+    return runExport(t("export.txt"), (cur) =>
       saveText(
         exportTXT(rgbaToGray(cur.data), cur.width, cur.height, {
           cell,
@@ -175,7 +177,10 @@ export default function ExportPanel() {
     );
   }
 
-  useConsoleMeta("export", exporting ? "Exporting" : exportReady ? "Ready" : "No output");
+  useConsoleMeta(
+    "export",
+    exporting ? t("export.working") : exportReady ? t("export.ready") : t("export.nothing"),
+  );
 
   // Board C05: a label above each control, formats as one segmented group.
   const formats = [
@@ -189,8 +194,8 @@ export default function ExportPanel() {
     <div className="flex h-full flex-col gap-3">
       <div className="flex flex-wrap items-start gap-x-4 gap-y-2.5">
         <div className="flex flex-col gap-1.5">
-          <Label>Formats</Label>
-          <div className="flex gap-2" role="group" aria-label="Export format">
+          <Label>{t("export.formats")}</Label>
+          <div className="flex gap-2" role="group" aria-label={t("export.format")}>
             {formats.map((f) => (
               <Button
                 key={f.id}
@@ -208,13 +213,13 @@ export default function ExportPanel() {
           </div>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="black-vector">Black vector</Label>
+          <Label htmlFor="black-vector">{t("export.blackVector")}</Label>
           <div className="flex h-7.5 items-center">
             <Switch id="black-vector" checked={black} onCheckedChange={setBlack} />
           </div>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label id="cell-label">Cell {cell}</Label>
+          <Label id="cell-label">{t("export.cellCount", { value: cell })}</Label>
           <Slider
             aria-labelledby="cell-label"
             className="w-22.5"
@@ -226,7 +231,7 @@ export default function ExportPanel() {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="charset">Charset</Label>
+          <Label htmlFor="charset">{t("export.charset")}</Label>
           <Input
             id="charset"
             value={charset}
@@ -236,7 +241,7 @@ export default function ExportPanel() {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="invert">Invert</Label>
+          <Label htmlFor="invert">{t("export.invert")}</Label>
           <div className="flex h-7.5 items-center">
             <Switch id="invert" checked={invert} onCheckedChange={setInvert} />
           </div>
@@ -250,7 +255,7 @@ export default function ExportPanel() {
           <Badge aria-hidden variant="secondary">
             Exporting {Math.round(exportProgress)}%
           </Badge>
-          <Progress aria-label="Export progress" value={exportProgress} max={100} />
+          <Progress aria-label={t("export.progress")} value={exportProgress} max={100} />
         </div>
       )}
       {!exporting && !exportReady && (
@@ -259,8 +264,8 @@ export default function ExportPanel() {
             <Download className="size-5" />
           </EmptyMedia>
           <EmptyHeader>
-            <EmptyTitle>Nothing to export</EmptyTitle>
-            <EmptyDescription>Render an image first to enable export.</EmptyDescription>
+            <EmptyTitle>{t("export.empty")}</EmptyTitle>
+            <EmptyDescription>{t("export.emptyHint")}</EmptyDescription>
           </EmptyHeader>
         </Empty>
       )}

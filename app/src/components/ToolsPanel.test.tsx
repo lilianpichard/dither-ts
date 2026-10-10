@@ -1,16 +1,28 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import { IntlProvider } from "react-intl";
 import ToolsPanel from "./ToolsPanel";
+import { MESSAGES } from "../i18n/messages";
 
 // A batch run must survive a tab switch. Radix unmounts an inactive
 // TabsContent, which aborts the run, so the batch panel is force-mounted and
 // only hidden. These tests read the rendered markup: without forceMount the
 // batch input is simply not there while another tab is showing.
+//
+// The provider is required because the panels pull their labels from it, so a
+// panel that renders is one that has a language.
 function render(tool: "presets" | "batch"): string {
-  return renderToStaticMarkup(<ToolsPanel tool={tool} onTool={() => {}} height={300} />);
+  return renderToStaticMarkup(
+    <IntlProvider locale="en" defaultLocale="en" messages={MESSAGES.en}>
+      <ToolsPanel tool={tool} onTool={() => {}} height={300} />
+    </IntlProvider>,
+  );
 }
 
-const BATCH_INPUT = 'aria-label="Batch images"';
+// The batch input is identified by its translated accessible name, which is
+// what the barrel of labelled controls now points at.
+const BATCH_INPUT = `aria-label="${MESSAGES.en["batch.pick"]}"`;
+const PRESET_NAME = MESSAGES.en["presets.name"];
 
 describe("ToolsPanel tab mounting", () => {
   it("keeps the batch panel mounted while another tab is showing", () => {
@@ -32,6 +44,6 @@ describe("ToolsPanel tab mounting", () => {
 
   it("leaves the other panels free to unmount", () => {
     // Only batch is force-mounted, so the preset panel still goes away.
-    expect(render("batch")).not.toContain("Preset name");
+    expect(render("batch")).not.toContain(PRESET_NAME);
   });
 });

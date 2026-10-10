@@ -1,6 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
+import { createIntl } from "react-intl";
 import { mediaRejection, routeMedia } from "./route";
 import { mediaKindOf } from "./kind";
+import { MESSAGES, type Locale } from "../i18n/messages";
+import type { Translate } from "../i18n";
+
+/** A real `t`, so the rejection wording is the wording the user reads. */
+function tFor(locale: Locale = "en"): Translate {
+  const intl = createIntl({ locale, defaultLocale: "en", messages: MESSAGES[locale] });
+  return ((id: string, values?: Record<string, string | number>) =>
+    String(intl.formatMessage({ id }, values))) as unknown as Translate;
+}
+
+const t = tFor();
 
 function file(name: string, type: string): File {
   return new File([new Uint8Array([1])], name, { type });
@@ -44,15 +56,15 @@ describe("routeMedia", () => {
 
 describe("mediaRejection", () => {
   it("names what cannot be used", () => {
-    expect(mediaRejection(file("doc.pdf", "application/pdf"))).toBe(
+    expect(mediaRejection(file("doc.pdf", "application/pdf"), t)).toBe(
       "doc.pdf is not an image or a video.",
     );
-    expect(mediaRejection(file("shot.png", "image/png"))).toBeNull();
-    expect(mediaRejection(file("clip.mp4", "video/mp4"))).toBeNull();
+    expect(mediaRejection(file("shot.png", "image/png"), t)).toBeNull();
+    expect(mediaRejection(file("clip.mp4", "video/mp4"), t)).toBeNull();
   });
 
   it("handles a file with no name", () => {
-    expect(mediaRejection(file("", "application/zip"))).toBe(
+    expect(mediaRejection(file("", "application/zip"), t)).toBe(
       "That file is not an image or a video.",
     );
   });

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../store";
+import { useTranslate } from "../i18n";
 import {
   MAX_PALETTE_COLORS,
   MIN_PALETTE_COLORS,
@@ -20,6 +21,7 @@ import { Plus, X } from "lucide-react";
 
 /** Custom palette editor: swatches, hex add/edit/remove, and apply-to-preview. */
 export default function PaletteEditor() {
+  const t = useTranslate();
   const palette = useApp((s) => s.params.palette);
   const setParams = useApp((s) => s.setParams);
   const paletteKey = JSON.stringify(palette);
@@ -74,7 +76,7 @@ export default function PaletteEditor() {
           id="palette-edit"
           className="w-24"
           value={editText}
-          aria-label="Selected color hex"
+          aria-label={t("palette.selectedHex")}
           aria-invalid={editText.length > 0 && editHex === null}
           onChange={(e) => setEditText(e.target.value)}
         />
@@ -91,7 +93,7 @@ export default function PaletteEditor() {
         <Button
           size="icon"
           variant="ghost"
-          aria-label="Remove selected color"
+          aria-label={t("palette.removeSelected")}
           disabled={draft.length <= MIN_PALETTE_COLORS}
           onClick={() => {
             if (index >= 0) change(removeColor(draft, index));
@@ -108,7 +110,7 @@ export default function PaletteEditor() {
           id="palette-add"
           className="w-24"
           value={addText}
-          aria-label="New color hex"
+          aria-label={t("palette.newHex")}
           aria-invalid={addHex === null}
           onChange={(e) => setAddText(e.target.value)}
         />
@@ -133,7 +135,7 @@ export default function PaletteEditor() {
         disabled={inUse || draft.length < MIN_PALETTE_COLORS}
         onClick={() => setParams({ color: true, palette: draft })}
       >
-        {inUse ? "Palette in use" : "Use palette"}
+        {inUse ? t("palette.inUse") : t("palette.use")}
       </Button>
     </div>
   );

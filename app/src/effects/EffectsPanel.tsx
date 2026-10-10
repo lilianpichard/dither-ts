@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslate } from "../i18n";
 import { EFFECT_DEFS } from "../../../src/index.js";
 import { useApp } from "../store";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/u
 import { useConsoleMeta } from "../components/consoleMeta";
 
 export default function EffectsPanel() {
+  const t = useTranslate();
   const effects = useApp((s) => s.effects);
   const addEffect = useApp((s) => s.addEffect);
   const removeEffect = useApp((s) => s.removeEffect);
@@ -45,7 +47,7 @@ export default function EffectsPanel() {
               ))}
             </SelectContent>
           </Select>
-          <Button onClick={() => addEffect(picked)}>Add effect</Button>
+          <Button onClick={() => addEffect(picked)}>{t("effects.add")}</Button>
           <span className="text-label text-muted-foreground">
             Effect type · {EFFECT_DEFS.find((d) => d.type === picked)?.label ?? picked}
           </span>
@@ -86,8 +88,8 @@ export default function EffectsPanel() {
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  aria-label={`Move ${def ? def.label : e.type} up`}
-                  title="Move up"
+                  aria-label={t("effects.moveUp", { name: def ? def.label : e.type })}
+                  title={t("effects.moveUp", { name: def ? def.label : e.type })}
                   onClick={() => moveEffect(i, -1)}
                 >
                   <ChevronUp />
@@ -95,8 +97,8 @@ export default function EffectsPanel() {
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  aria-label={`Move ${def ? def.label : e.type} down`}
-                  title="Move down"
+                  aria-label={t("effects.moveDown", { name: def ? def.label : e.type })}
+                  title={t("effects.moveDown", { name: def ? def.label : e.type })}
                   onClick={() => moveEffect(i, 1)}
                 >
                   <ChevronDown />
@@ -104,8 +106,8 @@ export default function EffectsPanel() {
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  aria-label={`Remove ${def ? def.label : e.type}`}
-                  title="Remove"
+                  aria-label={t("effects.remove", { name: def ? def.label : e.type })}
+                  title={t("effects.remove", { name: def ? def.label : e.type })}
                   onClick={() => removeEffect(i)}
                 >
                   <X />
@@ -117,8 +119,8 @@ export default function EffectsPanel() {
         {effects.length === 0 && (
           <Empty>
             <EmptyHeader>
-              <EmptyTitle>No effects</EmptyTitle>
-              <EmptyDescription>The dither output passes through untouched.</EmptyDescription>
+              <EmptyTitle>{t("effects.empty")}</EmptyTitle>
+              <EmptyDescription>{t("effects.emptyHint")}</EmptyDescription>
             </EmptyHeader>
           </Empty>
         )}

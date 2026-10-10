@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useApp } from "../store";
+import { useTranslate } from "../i18n";
 import {
   ADJUSTMENTS,
   adjustmentValue,
@@ -45,6 +46,7 @@ function show(value: number): string {
 
 /** Rail section: pre-dither geometry and colour operations, plus a crop editor. */
 export default function OperationsPanel() {
+  const t = useTranslate();
   const operations = useApp((s) => s.operations);
   const source = useApp((s) => s.source);
   const setOperations = useApp((s) => s.setOperations);
@@ -89,18 +91,18 @@ export default function OperationsPanel() {
         <Button
           size="sm"
           variant="outline"
-          title="Rotate 90 degrees clockwise"
+          title={t("ops.rotate")}
           onClick={() => setOperations({ rotate: nextQuarterTurn(operations.rotate) })}
         >
-          <RotateCw /> Rotate
+          <RotateCw /> {t("ops.rotate")}
         </Button>
         <Badge variant="secondary">{operations.rotate ?? 0}°</Badge>
         <Button
           size="icon-sm"
           variant={operations.flipHorizontal ? "accent" : "outline"}
-          aria-label="Flip horizontal"
+          aria-label={t("ops.flipH")}
           aria-pressed={operations.flipHorizontal === true}
-          title="Flip horizontal"
+          title={t("ops.flipH")}
           onClick={() => setOperations({ flipHorizontal: !operations.flipHorizontal })}
         >
           <FlipHorizontal />
@@ -108,9 +110,9 @@ export default function OperationsPanel() {
         <Button
           size="icon-sm"
           variant={operations.flipVertical ? "accent" : "outline"}
-          aria-label="Flip vertical"
+          aria-label={t("ops.flipV")}
           aria-pressed={operations.flipVertical === true}
-          title="Flip vertical"
+          title={t("ops.flipV")}
           onClick={() => setOperations({ flipVertical: !operations.flipVertical })}
         >
           <FlipVertical />
@@ -130,7 +132,7 @@ export default function OperationsPanel() {
           disabled={isIdentity(operations)}
           onClick={resetOperations}
         >
-          Reset
+          {t("ops.reset")}
         </Button>
       </div>
       {ADJUSTMENTS.map((def) => {
@@ -138,7 +140,7 @@ export default function OperationsPanel() {
         return (
           <div key={def.key} className="flex flex-col gap-1.5">
             <Label id={`op-${def.key}-label`}>
-              {def.label} {show(value)}
+              {t(`ops.${def.key}`)} {show(value)}
             </Label>
             <Slider
               aria-labelledby={`op-${def.key}-label`}
@@ -154,7 +156,7 @@ export default function OperationsPanel() {
       <div className="flex flex-col gap-2 rounded-lg border border-border bg-raised p-2">
         <div className="flex items-center gap-1.5">
           <Crop className="size-3 shrink-0 text-muted-foreground" aria-hidden />
-          <span className="text-label text-foreground">Crop</span>
+          <span className="text-label text-foreground">{t("ops.crop")}</span>
           <Badge variant={operations.crop ? "default" : "secondary"} className="ml-auto">
             {operations.crop ? `${operations.crop.width}×${operations.crop.height}` : "off"}
           </Badge>
@@ -188,7 +190,7 @@ export default function OperationsPanel() {
             disabled={!source || noop}
             onClick={() => setOperations({ crop: draft })}
           >
-            Apply
+            {t("ops.apply")}
           </Button>
           <Button
             size="sm"
@@ -197,10 +199,10 @@ export default function OperationsPanel() {
             disabled={!operations.crop}
             onClick={() => setOperations({ crop: undefined })}
           >
-            Clear
+            {t("ops.clear")}
           </Button>
         </div>
-        {!source && <p className="text-caption text-muted-foreground">Load an image to crop.</p>}
+        {!source && <p className="text-caption text-muted-foreground">{t("ops.needsSource")}</p>}
       </div>
     </div>
   );

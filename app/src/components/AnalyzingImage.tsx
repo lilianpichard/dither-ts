@@ -7,11 +7,14 @@
  * mirror behaviour match the original; `--loading-ui-analyzing-image-background`
  * should be set to the surface behind it so the wipe reads as native.
  */
+import { useTranslate } from "../i18n";
+
 export function AnalyzingImage({ className, ...props }: React.ComponentProps<"div">) {
+  const t = useTranslate();
   return (
     <div
       role="status"
-      aria-label="Analyzing image"
+      aria-label={t("status.analyzing")}
       className={`relative isolate shrink-0 ${className ?? ""}`}
       {...props}
     >
