@@ -8,13 +8,13 @@
 // literal apostrophe is written '' (two of them).
 
 export const en = {
-  // Where each panel sits: the rail's side and the console's side.
-  "layout.rail": "Controls side",
-  "layout.railLeft": "Left",
-  "layout.railRight": "Right",
-  "layout.console": "Console side",
-  "layout.consoleBottom": "Bottom",
-  "layout.consoleRight": "Right",
+  // The dock: where a panel lands when it is dragged to an edge.
+  "dock.title": "Dock panels",
+  "dock.hint": "or use the arrow keys",
+  "dock.top": "Top",
+  "dock.right": "Right",
+  "dock.bottom": "Bottom",
+  "dock.left": "Left",
   // Words used in more than one panel.
   "tool.presets": "Presets",
   "tool.effects": "Effects",
@@ -252,6 +252,13 @@ export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = "en";
 
 const fr: Record<MessageId, string> = {
+  // The dock: where a panel lands when it is dragged to an edge.
+  "dock.title": "Ancrer les panneaux",
+  "dock.hint": "ou utilisez les fleches",
+  "dock.top": "Haut",
+  "dock.right": "Droite",
+  "dock.bottom": "Bas",
+  "dock.left": "Gauche",
   "tool.presets": "Préréglages",
   "tool.effects": "Effets",
   "tool.batch": "Lot",
@@ -266,13 +273,6 @@ const fr: Record<MessageId, string> = {
   "presets.saveCurrent": "Enregistrer les réglages",
   "presets.addOriginals": "Ajouter les originaux",
   "language.pick": "Langue",
-  // Where each panel sits: the rail's side and the console's side.
-  "layout.rail": "Côté des réglages",
-  "layout.railLeft": "Gauche",
-  "layout.railRight": "Droite",
-  "layout.console": "Côté de la console",
-  "layout.consoleBottom": "Bas",
-  "layout.consoleRight": "Droite",
   "common.retry": "Réessayer",
   "common.cancel": "Annuler",
   "common.save": "Enregistrer",

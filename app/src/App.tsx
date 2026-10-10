@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "cn";
 import { cancelAll, renderImage } from "./worker/client";
@@ -20,6 +20,10 @@ import { MEDIA_ACCEPT, mediaKindOf, type MediaKind } from "./media/kind";
 import { cappedPixelSize } from "./video/pixelSize";
 import { useTranslate } from "./i18n";
 import { useLayout } from "./layout";
+import { useDockDrag, type DockPanel } from "./useDockDrag";
+import { DockTargets } from "./components/DockTargets";
+import { PanelGrip } from "./components/PanelGrip";
+import { dockLayout, type DockSide } from "./dock";
 import { useGlobalErrors } from "./ErrorReporting";
 import { mediaRejection, routeMedia } from "./media/route";
 import { Button } from "@/components/ui/button";
@@ -294,15 +298,124 @@ export default function App() {
   // Dimensions for the meta line, so it describes the frame actually on screen
   // rather than a still image that may not be loaded at all.
   const meta = video ? video.display : (shown ?? source);
-  // The arrangement is a preference, so the shell reads it once and the panels
-  // follow. Sizes stay local to each panel, which is why only the sides are
-  // held in state.
-  const { layout } = useLayout();
+  // The arrangement is shared state, because a layout held locally is one that
+  // only takes effect when its owner remounts. Sizes stay with the panels.
+  const railSide = useLayout((state) => state.railSide);
+  const consoleSide = useLayout((state) => state.consoleSide);
   // A panel can be dragged until the other one is at its own minimum, which is
   // the whole window minus what the neighbour needs. The constant is the space
   // the shell already reserves for the canvas, so the two agree by construction.
   const railMaxBounds = Math.max(RAIL_MIN, bounds.w - CANVAS_MIN_W);
   const consoleMaxBounds = Math.max(CONSOLE_MIN, bounds.h - CANVAS_MIN_H);
+  // Committing a dock. The rule that decides which edges a panel may take
+  // lives with the zones, so the highlight and the drop can never disagree
+  // about it, and a refused drop leaves the store untouched.
+  const commitDock = useCallback((panel: DockPanel, side: string) => {
+    const layout = useLayout.getState();
+    const next = dockLayout(layout, panel, side as DockSide);
+    if (next === layout) return;
+    if (panel === "rail") useLayout.getState().setRailSide(next.railSide);
+    else useLayout.getState().setConsoleSide(next.consoleSide);
+  }, []);
+  const { drag, start: startDock, move: moveDock, end: endDock } = useDockDrag(commitDock);
+  const canvasRef = useRef<HTMLElement>(null);
+  // The rectangle is measured here rather than read live, because a panel that
+  // resized mid-drag would otherwise change which edge the pointer is over.
+  const startDrag = useCallback(
+    (panel: DockPanel) => (event: React.PointerEvent) => {
+      const box = canvasRef.current?.getBoundingClientRect();
+      if (!box) return;
+      startDock(panel, event, {
+        left: box.left,
+        top: box.top,
+        width: box.width,
+        height: box.height,
+      });
+    },
+    [startDock],
+  );
+  const onGripKeyDown = useCallback(
+    (panel: DockPanel) => (event: React.KeyboardEvent) => {
+      // Arrow keys dock without dragging, so the layout is reachable by
+      // keyboard and does not require a pointer to hold and aim.
+      const sides =
+        panel === "rail"
+          ? (["left", "right"] as const)
+          : (["top", "right", "bottom", "left"] as const);
+      const current =
+        panel === "rail" ? useLayout.getState().railSide : useLayout.getState().consoleSide;
+      const index = (sides as readonly string[]).indexOf(current);
+      const delta =
+        event.key === "ArrowRight" || event.key === "ArrowDown"
+          ? 1
+          : event.key === "ArrowLeft" || event.key === "ArrowUp"
+            ? -1
+            : 0;
+      if (delta === 0) return;
+      event.preventDefault();
+      commitDock(panel, sides[(index + delta + sides.length) % sides.length]);
+    },
+    [],
+  );
+  const railGrip = (
+    <PanelGrip
+      side={railSide}
+      label={t("dock.title")}
+      hint={t("dock.hint")}
+      onPointerDown={startDrag("rail")}
+      onPointerMove={moveDock}
+      onPointerUp={endDock}
+      onKeyDown={onGripKeyDown("rail")}
+    />
+  );
+
+  // Where the console hangs, which decides the direction of the flex row it
+  // shares with the canvas and whether its extent is a width or a height. The
+  // boundary bar sits on the far side of the console from the canvas, so it is
+  // drawn the same whichever edge the console moved to.
+  const consoleRow = consoleSide === "left" || consoleSide === "right";
+  const consoleBefore = consoleSide === "top" || consoleSide === "left";
+  const consoleBarSide =
+    consoleSide === "right"
+      ? "left"
+      : consoleSide === "left"
+        ? "right"
+        : consoleSide === "top"
+          ? "bottom"
+          : "top";
+
+  const consoleGrip = (
+    <PanelGrip
+      side={consoleSide}
+      label={t("dock.title")}
+      hint={t("dock.hint")}
+      onPointerDown={startDrag("console")}
+      onPointerMove={moveDock}
+      onPointerUp={endDock}
+      onKeyDown={onGripKeyDown("console")}
+    />
+  );
+
+  const consoleDock = (
+    <>
+      <PanelResizer
+        side={consoleBarSide}
+        label="console"
+        size={consolePanel.size}
+        onResize={consolePanel.resize}
+        onToggle={consolePanel.toggle}
+        min={CONSOLE_MIN}
+        max={consoleMaxBounds}
+      />
+      <ToolsPanel
+        tool={tool}
+        onTool={setTool}
+        width={consoleRow ? consolePanel.size : undefined}
+        height={consoleRow ? "100%" : consolePanel.size}
+        grip={consoleGrip}
+      />
+    </>
+  );
 
   return (
     // relative is load-bearing, not decoration: Tailwind's `sr-only` is
@@ -318,12 +431,13 @@ export default function App() {
         {status}
       </div>
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        {layout.railSide === "left" && (
+        {railSide === "left" && (
           <>
             <ControlPanel
               onFile={(file, kind) => void onFile(file, kind)}
               width={rail.size}
               collapsed={rail.collapsed}
+              grip={railGrip}
             />
             <PanelResizer
               side="left"
@@ -339,10 +453,23 @@ export default function App() {
         <div
           className={cn(
             "flex min-h-0 min-w-0 flex-1 gap-3 p-3",
-            layout.consoleSide === "right" ? "flex-row" : "flex-col",
+            consoleRow ? "flex-row" : "flex-col",
           )}
         >
-          <section className="relative flex min-h-32 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-canvas">
+          {/* The console docks to any of the four edges: the flex direction
+              follows the pair it belongs to, and the bar sits between it and the
+              canvas so a console that moved keeps its own boundary. */}
+          {consoleBefore && consoleDock}
+          <section
+            ref={canvasRef}
+            className="relative flex min-h-32 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-canvas"
+          >
+            <DockTargets
+              panel={drag?.panel ?? "rail"}
+              rect={drag?.rect ?? null}
+              dragging={drag !== null}
+              zone={drag?.zone ?? null}
+            />
             {source || video ? (
               <>
                 {/* A frame too big to paint is one bad source, not a dead app. */}
@@ -419,36 +546,9 @@ export default function App() {
               </Empty>
             )}
           </section>
-          {layout.consoleSide === "right" && (
-            <>
-              <PanelResizer
-                side="left"
-                label="console"
-                size={consolePanel.size}
-                onResize={consolePanel.resize}
-                onToggle={consolePanel.toggle}
-                min={CONSOLE_MIN}
-                max={consoleMaxBounds}
-              />
-              <ToolsPanel tool={tool} onTool={setTool} width={consolePanel.size} height="100%" />
-            </>
-          )}
-          {layout.consoleSide === "bottom" ? (
-            <>
-              <PanelResizer
-                side="top"
-                label="console"
-                size={consolePanel.size}
-                onResize={consolePanel.resize}
-                onToggle={consolePanel.toggle}
-                min={CONSOLE_MIN}
-                max={consoleMaxBounds}
-              />
-              <ToolsPanel tool={tool} onTool={setTool} height={consolePanel.size} />
-            </>
-          ) : null}
+          {!consoleBefore && consoleDock}
         </div>
-        {layout.railSide === "right" && (
+        {railSide === "right" && (
           <>
             <PanelResizer
               side="right"
@@ -463,6 +563,7 @@ export default function App() {
               onFile={(file, kind) => void onFile(file, kind)}
               width={rail.size}
               collapsed={rail.collapsed}
+              grip={railGrip}
             />
           </>
         )}

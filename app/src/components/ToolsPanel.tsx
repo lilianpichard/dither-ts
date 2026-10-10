@@ -38,6 +38,7 @@ export default function ToolsPanel({
   onTool,
   height,
   width,
+  grip,
 }: {
   tool: ToolId;
   onTool: (t: ToolId) => void;
@@ -45,6 +46,8 @@ export default function ToolsPanel({
   height: number | "100%";
   /** Only set when the console hangs off the side rather than the bottom. */
   width?: number;
+  /** Drag handle the shell hands in, so the panel can be docked elsewhere. */
+  grip?: React.ReactNode;
 }) {
   // Each panel publishes its own count into the console header.
   const [meta, setMeta] = useState("");
@@ -62,7 +65,7 @@ export default function ToolsPanel({
       // screen; min-h-14 keeps the dock itself whole.
       className="flex min-h-14 flex-initial flex-col"
     >
-      <ConsoleShell title={t(active.title)} meta={meta || undefined}>
+      <ConsoleShell title={t(active.title)} meta={meta || undefined} actions={grip}>
         <ConsoleMetaContext.Provider value={{ tool, publish: (_owner, value) => setMeta(value) }}>
           <TabsContent value="presets" className="h-full">
             <PresetsPanel />

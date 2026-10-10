@@ -125,10 +125,13 @@ export default function ControlPanel({
   onFile,
   width,
   collapsed,
+  grip,
 }: {
   onFile: (file: File, kind: MediaKind) => void;
   width: number;
   collapsed: boolean;
+  /** Drag handle the shell hands in, so the panel can be docked elsewhere. */
+  grip?: React.ReactNode;
 }) {
   const params = useApp((s) => s.params);
   const source = useApp((s) => s.source);
@@ -184,6 +187,7 @@ export default function ControlPanel({
         collapsed && "hidden",
       )}
     >
+      {grip && <div className="flex justify-end">{grip}</div>}
       <Field label={t("rail.source")} accent>
         <SourceChip onFile={onFile} />
       </Field>

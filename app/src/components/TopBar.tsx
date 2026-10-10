@@ -4,7 +4,6 @@ import { useTranslate } from "../i18n";
 import { ThemeToggle } from "./ThemeToggle";
 import { UpdateCheck } from "./UpdateCheck";
 import { LanguageSwitch } from "./LanguageSwitch";
-import { LayoutControls } from "./LayoutControls";
 import { Kbd } from "@/components/ui/kbd";
 import { TOOL_COUNT } from "./ToolsPanel";
 import logoDark from "dither-ts/assets/dither_logo_dark.webp";
@@ -52,7 +51,6 @@ export function TopBar() {
         </HistoryButton>
         <UpdateCheck />
         <LanguageSwitch />
-        <LayoutControls />
         <ThemeToggle />
       </div>
     </header>
