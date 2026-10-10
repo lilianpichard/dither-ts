@@ -14,6 +14,7 @@ import { cancelAll, renderImage } from "../worker/client";
 import { getPool } from "../worker/pool";
 import { stripKeys } from "../presets/store";
 import { resolveColorMode, useApp } from "../store";
+import { exportPixelSize, previewPixelSize } from "./pixelSize";
 import type { VideoPreview } from "../store";
 import type { Frame } from "../preview/frame";
 import { warnIfSlow } from "../lib/slowOperation";
@@ -216,7 +217,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
         method: params.method,
         threshold: params.threshold,
         palette: params.palette,
-        pixelSize: params.pixelSize,
+        pixelSize: previewPixelSize(params, clip.info, size),
         effects: stripKeys(effects),
         operations: frameOperations(operations, clip.info, size),
         seed: temporal ? Math.round(t * fps) : 0,
@@ -548,7 +549,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
               method: snapshot.method,
               threshold: snapshot.threshold,
               palette: snapshot.palette,
-              pixelSize: snapshot.pixelSize,
+              pixelSize: exportPixelSize(snapshot, currentClip.info, plan),
               effects: fx,
               operations: frameOps,
               seed: temporal ? index : 0,

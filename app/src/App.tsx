@@ -16,6 +16,7 @@ import { usePanelSize } from "./lib/panelSize";
 import { SLOW_OPERATION_MS, warnIfSlow } from "./lib/slowOperation";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { MEDIA_ACCEPT, mediaKindOf, type MediaKind } from "./media/kind";
+import { cappedPixelSize } from "./video/pixelSize";
 import { mediaRejection, routeMedia } from "./media/route";
 import { Button } from "@/components/ui/button";
 import {
@@ -151,6 +152,11 @@ export default function App() {
         let height = source.height;
         let pixels = source.pixels.slice(0);
         let frameOperations = operations;
+        // The heavy scans are capped for the preview only. Everything that
+        // describes the source in its own pixels follows the downscale, so the
+        // crop already does; the pixel size has to as well, or the export comes
+        // back with blocks a different share of the frame than this preview.
+        let framePixelSize = params.pixelSize;
         const capped =
           isHeavyMethod(params.method) && Math.max(width, height) > MAX_HEAVY_PREVIEW_DIM;
         if (capped) {
@@ -168,8 +174,9 @@ export default function App() {
           if (!smallCtx) throw new Error("this browser would not give the app a 2d context");
           smallCtx.drawImage(full, 0, 0, size.width, size.height);
           const data = smallCtx.getImageData(0, 0, size.width, size.height);
-          // Crop lives in source pixels, so it follows the preview downscale.
+          // Crop and block size both live in source pixels, so both follow it.
           frameOperations = scaleOperations(operations, size.width / width);
+          framePixelSize = cappedPixelSize(params, size, source);
           width = size.width;
           height = size.height;
           pixels = new Uint8ClampedArray(data.data).buffer as ArrayBuffer;
@@ -186,7 +193,7 @@ export default function App() {
             method: params.method,
             threshold: params.threshold,
             palette: params.palette,
-            pixelSize: params.pixelSize,
+            pixelSize: framePixelSize,
             effects: stripKeys(effects),
             operations: requestOperations(frameOperations, width, height),
             seed: 0,
@@ -347,7 +354,7 @@ export default function App() {
             ) : (
               <Empty className="h-full">
                 <EmptyHeader>
-                  <EmptyTitle className="text-display uppercase">Drop image</EmptyTitle>
+                  <EmptyTitle className="text-display uppercase">Drop media</EmptyTitle>
                   <EmptyDescription>
                     Choose an image or a video to start dithering.
                   </EmptyDescription>

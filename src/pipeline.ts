@@ -69,6 +69,35 @@ export function effectivePixelSize(pixelSize = 1, preview = false): number {
   return factor;
 }
 
+/**
+ * Pixel size for a frame rendered smaller than the source.
+ *
+ * A pixel size counts source pixels per block, so it only means what the user
+ * typed at the source's own resolution. The preview is capped well below that
+ * (video at 1080/720, stills at 720 for the heavy scans) while the export is
+ * not, and applying the same number to both gives blocks of the same pixel
+ * count on frames of very different sizes: the export comes back visibly finer
+ * than the preview. Scaling by the long edge, which `fitSize` caps, keeps the
+ * block's share of the frame the same on both.
+ *
+ * Clamped at one, since a block smaller than a pixel is not a block, and the
+ * share can only be approximated because the factor has to be a whole number.
+ */
+export function proportionalPixelSize(
+  pixelSize: number,
+  workLongEdge: number,
+  sourceLongEdge: number,
+): number {
+  assertPixelSize(pixelSize);
+  if (!Number.isSafeInteger(workLongEdge) || workLongEdge <= 0) {
+    throw new TypeError("working long edge must be a positive safe integer");
+  }
+  if (!Number.isSafeInteger(sourceLongEdge) || sourceLongEdge <= 0) {
+    throw new TypeError("source long edge must be a positive safe integer");
+  }
+  return Math.max(1, Math.round((pixelSize * workLongEdge) / sourceLongEdge));
+}
+
 function sampleIndex(
   width: number,
   height: number,
