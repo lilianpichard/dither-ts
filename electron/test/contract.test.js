@@ -381,21 +381,37 @@ describe("release hardening", () => {
     assert.equal(bytes.readUInt32BE(20), 1024);
   });
 
-  test("signs and notarizes on macos, which gatekeeper requires", () => {
-    // Without the hardened runtime notarization is refused outright.
-    assert.equal(build.mac.hardenedRuntime, true);
-    assert.equal(build.mac.notarize, true);
-    for (const entitlements of [build.mac.entitlements, build.mac.entitlementsInherit]) {
-      assert.ok(fs.existsSync(path.join(__dirname, "..", entitlements)), `${entitlements} missing`);
-    }
+  test("signs nothing, on any platform", () => {
+    // Paid signing was dropped on purpose: an unsigned build installs anywhere,
+    // and the price of that is a Gatekeeper and a SmartScreen warning. What
+    // this test holds is the honesty of it, because a config that claims to
+    // notarise with no certificate behind it is a config that lies.
+    assert.equal(
+      build.mac.hardenedRuntime,
+      undefined,
+      "mac asks for a signing material it does not have",
+    );
+    assert.equal(build.mac.notarize, undefined, "mac asks to notarise with no Apple credentials");
+    assert.equal(build.mac.entitlements, undefined);
+    assert.equal(build.mac.entitlementsInherit, undefined);
+    assert.equal(build.win.signtoolOptions, undefined, "win names a certificate it does not have");
   });
 
-  test("names the windows publisher and a timestamp server", () => {
-    // Without a publisher the smart screen warning names nobody, and without
-    // a timestamp the signature stops validating once the certificate expires.
-    assert.equal(build.win.signtoolOptions.publisherName, "Lilian Pichard");
-    assert.ok(build.win.signtoolOptions.timeStampServer);
+  test("still builds the three platforms, which signing was never needed for", () => {
+    // Dropping signing costs the auto-updater on macOS, because Squirrel.Mac
+    // refuses to patch an unsigned app. Everything else about packaging stands,
+    // and this is the list that has to survive the decision.
+    assert.deepEqual(build.mac.target, ["dmg", "zip"]);
     assert.deepEqual(build.win.target, ["nsis"]);
+    assert.deepEqual(build.linux.target, ["AppImage", "deb"]);
+  });
+
+  test("leaves no signing file behind for a reader to find", () => {
+    // A dangling reference would mean a future reader wires a certificate into
+    // a project that decided not to have one.
+    const build_ = path.join(__dirname, "..", "build");
+    const entries = fs.readdirSync(build_);
+    assert.ok(!entries.some((entry) => entry.includes("entitlements")), entries.join(", "));
   });
 
   test("offers linux a package-manager artifact, not only an appimage", () => {

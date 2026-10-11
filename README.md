@@ -23,6 +23,14 @@ npm install dither-ts
 Desktop builds for macOS, Windows and Linux are on the
 [releases page](https://github.com/lilianpichard/dither-ts/releases).
 
+The builds are not signed. It still installs, with two warnings to click past the first time.
+
+- **Windows**: SmartScreen says the publisher is unknown. Open the _more info_
+  panel, then _run anyway_. Auto-update works normally afterwards.
+- **macOS**: right-click the app and choose _Open_, rather than double-clicking
+  it. Auto-update does **not** work, because macOS refuses to patch an unsigned
+  app: download each release from the releases page.
+
 ## What It Does
 
 - 24 dithering methods, from ordered matrices to error diffusion

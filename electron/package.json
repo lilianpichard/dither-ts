@@ -97,11 +97,6 @@
       "category": "public.app-category.graphics-design",
       "icon": "build/icon.png",
       "darkModeSupport": true,
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
-      "notarize": true,
       "extendInfo": {
         "NSHumanReadableCopyright": "Copyright (C) 2026 Lilian Pichard. GPL-3.0-only."
       }
@@ -110,12 +105,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "build/icon.png",
-      "signtoolOptions": {
-        "publisherName": "Lilian Pichard",
-        "timeStampServer": "http://timestamp.digicert.com",
-        "rfc3161TimeStampServer": "http://timestamp.digicert.com"
-      }
+      "icon": "build/icon.png"
     },
     "nsis": {
       "oneClick": false,

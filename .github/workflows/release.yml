@@ -18,8 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # One matrix entry per platform, because signing material does not cross over:
-  # a macOS certificate means nothing on a Windows runner.
+  # One entry per platform, because the three builders need three runners.
   desktop:
     name: ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
@@ -30,27 +29,13 @@ jobs:
           - platform: linux
             os: ubuntu-latest
             target: AppImage deb
-            link: LINUX_CSC_LINK
-            password: LINUX_CSC_KEY_PASSWORD
           - platform: mac
             os: macos-latest
             target: dmg zip
-            link: MAC_CSC_LINK
-            password: MAC_CSC_KEY_PASSWORD
           - platform: win
             os: windows-latest
             target: nsis
-            link: WIN_CSC_LINK
-            password: WIN_CSC_KEY_PASSWORD
     env:
-      # electron-builder reads one variable name on every platform, so each
-      # entry supplies only its own certificate. An empty value means unsigned,
-      # which still produces an artifact rather than failing the release.
-      CSC_LINK: ${{ secrets[matrix.link] }}
-      CSC_KEY_PASSWORD: ${{ secrets[matrix.password] }}
-      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
