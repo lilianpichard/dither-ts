@@ -26,6 +26,7 @@ import { PanelGrip } from "./components/PanelGrip";
 import { dockLayout, type DockSide } from "./dock";
 import { useGlobalErrors } from "./ErrorReporting";
 import { mediaRejection, routeMedia } from "./media/route";
+import { useMediaDrop } from "./media/useMediaDrop";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -319,6 +320,10 @@ export default function App() {
   }, []);
   const { drag, start: startDock, move: moveDock, end: endDock } = useDockDrag(commitDock);
   const canvasRef = useRef<HTMLElement>(null);
+  // The canvas takes a drop as well as the rail, so a file dragged anywhere onto
+  // the work loads. The same hook the rail uses, so the two cannot drift.
+  const { dragging: canvasDrag, bindings: canvasDrop } = useMediaDrop(onFile);
+  const clearMedia = useApp((s) => s.clearMedia);
   // The rectangle is measured here rather than read live, because a panel that
   // resized mid-drag would otherwise change which edge the pointer is over.
   const startDrag = useCallback(
@@ -462,8 +467,25 @@ export default function App() {
           {consoleBefore && consoleDock}
           <section
             ref={canvasRef}
-            className="relative flex min-h-32 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-canvas"
+            className={cn(
+              "relative flex min-h-32 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-canvas",
+              canvasDrag && "border-primary",
+            )}
+            {...canvasDrop}
           >
+            {canvasDrag && (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-primary/10"
+              >
+                <p className="text-title text-accent-label uppercase">
+                  {t("preview.drop")}
+                  <span className="block text-label text-muted-foreground normal-case">
+                    {t("preview.dropHint")}
+                  </span>
+                </p>
+              </div>
+            )}
             <DockTargets
               panel={drag?.panel ?? "rail"}
               rect={drag?.rect ?? null}
@@ -491,6 +513,8 @@ export default function App() {
                     geometry={video ? video.geometry : source}
                     resetKey={video ? video.clipKey : source}
                     label={video ? t("preview.video") : t("preview.image")}
+                    onClear={() => clearMedia()}
+                    canClear={source !== null || video !== null}
                   />
                 </ErrorBoundary>
                 {meta ? (

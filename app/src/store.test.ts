@@ -58,6 +58,7 @@ function reset(): void {
     previewScaled: false,
     past: [],
     future: [],
+    clearSeq: 0,
   });
 }
 
@@ -381,5 +382,66 @@ describe("loading a video over a still", () => {
     state().showVideo(mediaFrame());
     expect(state().media).toBe("video");
     expect(state().isVideo(state())).toBe(true);
+  });
+});
+
+describe("clearing the loaded media", () => {
+  beforeEach(() => {
+    useApp.setState({
+      source,
+      result: finalResult,
+      videoPreview: mediaFrame(),
+      media: "image",
+      rendering: true,
+      previewScaled: true,
+    });
+  });
+
+  it("empties the canvas, whichever kind owned it", () => {
+    useApp.getState().clearMedia();
+    const next = useApp.getState();
+    expect(next.source).toBeNull();
+    expect(next.result).toBeNull();
+    expect(next.videoPreview).toBeNull();
+    expect(next.media).toBeNull();
+    expect(next.rendering).toBe(false);
+    expect(next.previewScaled).toBe(false);
+  });
+
+  it("leaves the settings alone, because a cleared canvas is not a reset", () => {
+    // Clearing what was loaded is not the same as going back to defaults: the
+    // method and the palette were chosen and survive.
+    const params = useApp.getState().params;
+    useApp.getState().clearMedia();
+    expect(useApp.getState().params).toEqual(params);
+  });
+
+  it("clears a clip that owns the canvas too", () => {
+    useApp.setState({ media: "video" });
+    useApp.getState().clearMedia();
+    expect(useApp.getState().videoPreview).toBeNull();
+    expect(useApp.getState().media).toBeNull();
+  });
+
+  it("moves the counter, which is how the timeline drops its clip", () => {
+    // The store owns the canvas and the timeline owns the clip; a counter is the
+    // only thing the two share, so it has to move every time.
+    expect(useApp.getState().clearSeq).toBe(0);
+    useApp.getState().clearMedia();
+    expect(useApp.getState().clearSeq).toBe(1);
+    useApp.getState().clearMedia();
+    expect(useApp.getState().clearSeq).toBe(2);
+  });
+
+  it("is idempotent on the state, but still tells the timeline", () => {
+    // A second clear on an already empty canvas changes nothing, and the counter
+    // still moves: the timeline has to be told even when there was nothing to
+    // clear, or a clip left behind by the first would stay.
+    useApp.getState().clearMedia();
+    useApp.getState().clearMedia();
+    const next = useApp.getState();
+    expect(next.source).toBeNull();
+    expect(next.result).toBeNull();
+    expect(next.clearSeq).toBe(2);
   });
 });

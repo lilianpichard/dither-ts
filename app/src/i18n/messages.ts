@@ -213,6 +213,11 @@ export const en = {
   "export.writeTo": "Writes {file}",
   // One line on what the chosen writer does that the others do not.
   "export.notePng": "Lossless, keeps transparency",
+  // The canvas drop target and the control that empties it.
+  "preview.drop": "Drop to load",
+  "preview.dropHint": "An image or a video",
+  "preview.clear": "Clear the canvas",
+  "preview.clearNothing": "Nothing loaded",
   "export.noteJpg": "Compressed, white background",
   "export.noteSvg": "Vector rectangles, scales to any size",
   "export.noteTxt": "Plain text, one character per cell",
@@ -467,6 +472,11 @@ const fr: Record<MessageId, string> = {
   "export.writeTo": "Écrit {file}",
   // Une ligne sur ce que le format choisi fait que les autres ne font pas.
   "export.notePng": "Sans perte, garde la transparence",
+  // La cible de dépôt du canvas et la commande qui le vide.
+  "preview.drop": "Déposer pour charger",
+  "preview.dropHint": "Une image ou une vidéo",
+  "preview.clear": "Vider le canvas",
+  "preview.clearNothing": "Rien de chargé",
   "export.noteJpg": "Compressé, fond blanc",
   "export.noteSvg": "Rectangles vectoriels, zoom sans perte",
   "export.noteTxt": "Texte brut, un caractère par cellule",

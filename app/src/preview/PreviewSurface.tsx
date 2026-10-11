@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Eye, Maximize, ZoomIn, ZoomOut } from "lucide-react";
+import { Eye, Maximize, X, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "cn";
 import { useTranslate } from "../i18n";
 import { frameToCanvas, type Frame } from "./frame";
@@ -59,6 +59,10 @@ export interface PreviewSurfaceProps {
    */
   resetKey?: unknown;
   label: string;
+  /** Empties the canvas. Omit and the control is not drawn at all. */
+  onClear?: () => void;
+  /** False while nothing is loaded, so the control is visible but dead. */
+  canClear?: boolean;
 }
 
 /**
@@ -79,6 +83,8 @@ export default function PreviewSurface({
   geometry,
   resetKey,
   label,
+  onClear,
+  canClear = true,
 }: PreviewSurfaceProps) {
   const t = useTranslate();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -246,6 +252,24 @@ export default function PreviewSurface({
         <ZoomButton label={t("preview.fit")} hint="0" onClick={fit}>
           <Maximize />
         </ZoomButton>
+        {onClear && (
+          <>
+            <span aria-hidden className="mx-0.5 h-3.5 w-px bg-border" />
+            <button
+              type="button"
+              aria-label={t("preview.clear")}
+              title={canClear ? t("preview.clear") : t("preview.clearNothing")}
+              disabled={!canClear}
+              onClick={onClear}
+              className={cn(
+                "flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-3",
+                canClear ? "text-muted-foreground hover:text-foreground" : "text-muted-foreground",
+              )}
+            >
+              <X />
+            </button>
+          </>
+        )}
         <button
           type="button"
           aria-label={t("preview.compare")}

@@ -92,6 +92,13 @@ interface AppState {
   /** A file the shared picker routed to the video panel, waiting to load. */
   pendingVideo: File | null;
   loadVideo: (file: File | null) => void;
+  /**
+   * Bumped whenever the loaded media is dropped, so the timeline can throw the
+   * clip away without the store having to reach into it. The canvas owner lives
+   * in the store; the clip itself lives in the timeline.
+   */
+  clearSeq: number;
+  clearMedia: () => void;
   /** Params are merged; a given `operations` set replaces the current one. */
   setParams: (params: Partial<DitherParams>, operations?: Partial<ImageOperations>) => void;
   /** Patch the operation set, leaving untouched fields alone. */
@@ -139,6 +146,7 @@ function fitToSource(source: ImageSource | null, operations: unknown): ImageOper
 }
 
 export const useApp = create<AppState>()((set) => ({
+  media: null,
   source: null,
   params: {
     method: "Bayer 4x4",
@@ -156,8 +164,22 @@ export const useApp = create<AppState>()((set) => ({
   previewScaled: false,
   past: EMPTY_HISTORY.past,
   future: EMPTY_HISTORY.future,
-  media: null,
   pendingVideo: null,
+  clearSeq: 0,
+  clearMedia: () =>
+    set((state) => ({
+      media: null,
+      source: null,
+      // The canvas goes empty, whichever kind owned it. A clip stays loaded in
+      // the timeline until it sees the counter below move, so the two agree
+      // about what is on screen.
+      videoPreview: null,
+      result: null,
+      preview: null,
+      rendering: false,
+      previewScaled: false,
+      clearSeq: state.clearSeq + 1,
+    })),
   loadVideo: (file) => set({ pendingVideo: file }),
   setSource: (source) =>
     set((state) => ({

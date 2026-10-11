@@ -188,6 +188,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
   const operations = useApp((s) => s.operations);
   const setVideoPreview = useApp((s) => s.setVideoPreview);
   const media = useApp((s) => s.media);
+  const clearSeq = useApp((s) => s.clearSeq);
   const pendingVideo = useApp((s) => s.pendingVideo);
   const loadVideo = useApp((s) => s.loadVideo);
   const [clip, setClip] = useState<LoadedClip | null>(null);
@@ -447,6 +448,26 @@ export default function Timeline({ active = true }: { active?: boolean }) {
     loadVideo(null);
     void onFile(pendingVideo);
   }, [pendingVideo, loadVideo, onFile]);
+
+  // The canvas was emptied, so the clip goes with it. The counter is what the
+  // store has to say about it: the canvas owner lives there, the clip lives
+  // here, and a bump is the only thing the two share.
+  useEffect(() => {
+    if (clearSeq === 0) return;
+    previewAbort.current?.abort();
+    cancelAll(PREVIEW_SCOPE);
+    previewSeq.current++;
+    setPlaying(false);
+    clipRef.current?.element.pause();
+    clipRef.current?.revoke();
+    clipRef.current = null;
+    loadAbort.current?.abort();
+    setClip(null);
+    setFileName("");
+    setTime(0);
+    setRange({ start: 0, end: 0 });
+    resetLivePreview();
+  }, [clearSeq]);
 
   // An image took the canvas, so this clip stops being the subject. The clip
   // itself stays loaded and exportable, which is why it is not discarded here:

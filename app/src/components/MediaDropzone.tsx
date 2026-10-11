@@ -4,7 +4,8 @@ import { toast } from "sonner";
 
 import { canOpenFiles } from "@/desktop/bridge";
 import { openFailure, openMedia } from "@/desktop/files";
-import { MEDIA_ACCEPT, mediaKindOf, type MediaKind } from "@/media/kind";
+import { MEDIA_ACCEPT, type MediaKind } from "@/media/kind";
+import { useMediaDrop } from "@/media/useMediaDrop";
 import { useTranslate } from "@/i18n";
 import { cn } from "@/lib/utils";
 
@@ -45,23 +46,12 @@ export function MediaDropzone({
 }: MediaDropzoneProps) {
   const t = useTranslate();
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const dragCount = React.useRef(0);
-  const [dragging, setDragging] = React.useState(false);
   const inactive = disabled || busy;
   // The desktop shell has a real dialog; a browser still needs the file input.
   const native = React.useMemo(canOpenFiles, []);
-
-  const handleFile = (file: File | undefined | null) => {
-    if (!file || inactive) return;
-    const kind = mediaKindOf(file);
-    if (kind === null) {
-      // The picker filters on accept, but a drop does not, and a silent no-op
-      // looks like the app is broken.
-      toast.error(t("error.notMedia", { name: file.name || "" }));
-      return;
-    }
-    onFile(file, kind);
-  };
+  // The same gesture the canvas takes, so a drop anywhere in the app behaves the
+  // same and the two cannot drift.
+  const { dragging, bindings, handleFile } = useMediaDrop(onFile, !inactive);
 
   async function pick() {
     try {
@@ -73,29 +63,7 @@ export function MediaDropzone({
   }
 
   return (
-    <div
-      className={cn("w-full", className)}
-      onDragEnter={(e) => {
-        e.preventDefault();
-        if (inactive) return;
-        dragCount.current += 1;
-        setDragging(true);
-      }}
-      onDragLeave={(e) => {
-        e.preventDefault();
-        if (inactive) return;
-        dragCount.current = Math.max(0, dragCount.current - 1);
-        if (dragCount.current === 0) setDragging(false);
-      }}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={(e) => {
-        e.preventDefault();
-        dragCount.current = 0;
-        setDragging(false);
-        if (inactive) return;
-        handleFile(e.dataTransfer.files?.[0]);
-      }}
-    >
+    <div className={cn("w-full", className)} {...bindings}>
       <button
         type="button"
         disabled={inactive}
