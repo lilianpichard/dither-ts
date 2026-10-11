@@ -204,6 +204,18 @@ export const en = {
   "export.working": "Exporting",
   "export.ready": "Ready",
   "export.nothing": "No output",
+  // The export panel's two groups and the one action.
+  "export.options": "Options",
+  "export.output": "Output",
+  "export.run": "Export",
+  "export.file": "File",
+  "export.pixel": "Pixel",
+  "export.writeTo": "Writes {file}",
+  // One line on what the chosen writer does that the others do not.
+  "export.notePng": "Lossless, keeps transparency",
+  "export.noteJpg": "Compressed, white background",
+  "export.noteSvg": "Vector rectangles, scales to any size",
+  "export.noteTxt": "Plain text, one character per cell",
 
   // Video timeline.
   "timeline.title": "Video Timeline",
@@ -242,6 +254,15 @@ export const en = {
     "Video-only export: MP4 and GIF drop the source audio. Audio capture unavailable here (missing {missing}).",
   "timeline.working": "Working…",
   "timeline.phase": "{phase}",
+  // The timeline's three groups.
+  "timeline.ribbon": "Selected range",
+  "timeline.transport": "Playback",
+  "timeline.settings": "Frame settings",
+  "timeline.clip": "Clip",
+  "timeline.sourceDim": "Source",
+  "timeline.workingDim": "Working",
+  "timeline.exportDim": "Export",
+  "timeline.selected": "{start} s to {end} s",
 } as const;
 
 export type MessageId = keyof typeof en;
@@ -437,6 +458,18 @@ const fr: Record<MessageId, string> = {
   "export.working": "Export",
   "export.ready": "Prêt",
   "export.nothing": "Aucun rendu",
+  // Les deux groupes du panneau d'export et son unique action.
+  "export.options": "Options",
+  "export.output": "Sortie",
+  "export.run": "Exporter",
+  "export.file": "Fichier",
+  "export.pixel": "Pixel",
+  "export.writeTo": "Écrit {file}",
+  // Une ligne sur ce que le format choisi fait que les autres ne font pas.
+  "export.notePng": "Sans perte, garde la transparence",
+  "export.noteJpg": "Compressé, fond blanc",
+  "export.noteSvg": "Rectangles vectoriels, zoom sans perte",
+  "export.noteTxt": "Texte brut, un caractère par cellule",
 
   "timeline.title": "Chronologie vidéo",
   "timeline.empty": "Aucune vidéo chargée",
@@ -474,6 +507,15 @@ const fr: Record<MessageId, string> = {
     "Export vidéo uniquement : le MP4 et le GIF perdent l''audio de la source. Capture audio indisponible ici (manque {missing}).",
   "timeline.working": "Traitement…",
   "timeline.phase": "{phase}",
+  // Les trois groupes de la chronologie.
+  "timeline.ribbon": "Plage sélectionnée",
+  "timeline.transport": "Lecture",
+  "timeline.settings": "Réglages des images",
+  "timeline.clip": "Clip",
+  "timeline.sourceDim": "Source",
+  "timeline.workingDim": "Travail",
+  "timeline.exportDim": "Export",
+  "timeline.selected": "{start} s à {end} s",
 };
 
 export const MESSAGES = { en: en as Record<MessageId, string>, fr } satisfies Record<

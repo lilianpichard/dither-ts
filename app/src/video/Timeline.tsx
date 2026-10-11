@@ -17,6 +17,7 @@ import { resolveColorMode, useApp } from "../store";
 import { exportPixelSize, previewPixelSize } from "./pixelSize";
 import { useTranslate } from "../i18n";
 import type { VideoPreview } from "../store";
+import type { DitherMethod } from "../../../src/index.js";
 import type { Frame } from "../preview/frame";
 import { warnIfSlow } from "../lib/slowOperation";
 import { announceProgress } from "../progress";
@@ -35,6 +36,7 @@ import { exportGif } from "./exportGif";
 import { canExportMp4, exportMp4, type ExportFrame } from "./exportMp4";
 import { frameOperations } from "./operations";
 import { orderedAsyncPipeline } from "./pipeline";
+import { playheadPercent, spanPercent } from "./ribbon";
 import { MAX_FULL_RES_DIM, clampRange, fitSize, planFrames, planMaxDim, previewSize } from "./jobs";
 import {
   advancePlayback,
@@ -59,6 +61,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Toggle } from "@/components/ui/toggle";
+import { Card } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 
 interface CapturedInput {
@@ -76,6 +81,105 @@ const SLOW_EXPORT_WARNING_MS = 8000;
  */
 function clipKeyOf(clip: LoadedClip): string {
   return `${clip.info.width}x${clip.info.height}@${clip.info.duration.toFixed(3)}`;
+}
+
+/**
+ * The three sizes a clip is read at, side by side. They are cases rather than a
+ * sentence because each one is a number the user compares against the other
+ * two, and the comparison is the point.
+ */
+export function DimensionGrid({
+  clip,
+  method,
+  fullRes,
+}: {
+  clip: LoadedClip;
+  method: DitherMethod;
+  fullRes: boolean;
+}) {
+  const t = useTranslate();
+  const working = previewSize(clip.info, method);
+  const output = fitSize(
+    clip.info.width,
+    clip.info.height,
+    planMaxDim(method, fullRes ? MAX_FULL_RES_DIM : undefined),
+  );
+  const cells = [
+    {
+      key: "sourceDim",
+      label: t("timeline.sourceDim"),
+      width: clip.info.width,
+      height: clip.info.height,
+    },
+    { key: "workingDim", label: t("timeline.workingDim"), ...working },
+    { key: "exportDim", label: t("timeline.exportDim"), ...output },
+  ];
+  return (
+    <dl className="grid grid-cols-3 gap-2">
+      {cells.map((cell) => (
+        <div key={cell.key} className="rounded-lg border border-border bg-card p-2">
+          <dt className="text-label text-muted-foreground uppercase">{cell.label}</dt>
+          <dd className="mt-0.5 text-body-lg text-foreground">
+            {cell.width}×{cell.height}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
+ * The clip as a band: the selected span is the filled part and the playhead the
+ * marker on it, so a range is read at a glance before it is typed into a field.
+ *
+ * Everything is a fraction of the clip, which is what the ribbon helper is for:
+ * a range that arrives inverted or past the end still has to draw a band rather
+ * than nothing.
+ */
+export function TimelineRibbon({
+  range,
+  duration,
+  time,
+  onScrub,
+}: {
+  range: { start: number; end: number };
+  duration: number;
+  time: number;
+  onScrub: (time: number) => void;
+}) {
+  const t = useTranslate();
+  const span = spanPercent(range, duration);
+  const playhead = playheadPercent(time, duration);
+  return (
+    <Card
+      title={t("timeline.ribbon")}
+      meta={t("timeline.selected", {
+        start: range.start.toFixed(1),
+        end: range.end.toFixed(1),
+      })}
+    >
+      <div className="relative h-7 w-full overflow-hidden rounded-lg border border-border bg-canvas">
+        <div
+          aria-hidden
+          className="absolute inset-y-0 border-x-2 border-primary bg-primary/20"
+          style={{ left: `${span.left * 100}%`, width: `${span.width * 100}%` }}
+        />
+        <div
+          aria-hidden
+          className="absolute inset-y-0 w-0.5 bg-foreground"
+          style={{ left: `${playhead * 100}%` }}
+        />
+      </div>
+      <Slider
+        aria-label={t("timeline.scrub")}
+        min={0}
+        max={duration}
+        step={0.05}
+        value={[time]}
+        onValueChange={([v]) => onScrub(v)}
+      />
+    </Card>
+  );
 }
 
 export default function Timeline({ active = true }: { active?: boolean }) {
@@ -637,14 +741,6 @@ export default function Timeline({ active = true }: { active?: boolean }) {
 
   // The working badge shares previewSize with the preview path, so the label
   // cannot drift from the size actually rendered.
-  const workingDim = clip ? previewSize(clip.info, params.method) : null;
-  const exportDim = clip
-    ? fitSize(
-        clip.info.width,
-        clip.info.height,
-        planMaxDim(params.method, fullRes ? MAX_FULL_RES_DIM : undefined),
-      )
-    : null;
   const t = useTranslate();
   const live = announceProgress({
     label: t("timeline.exportLabel"),
@@ -656,218 +752,236 @@ export default function Timeline({ active = true }: { active?: boolean }) {
   useConsoleMeta("timeline", clip ? t("timeline.clipLoaded") : t("timeline.noClip"));
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Loading happens in the rail and the empty state, which take an image
-            or a video. This panel never needs its own picker, which is what let
-            an image and a clip both be loaded at once. */}
-        {clip && (
-          <Badge variant="secondary">
-            {t("timeline.dims", {
-              width: clip.info.width,
-              height: clip.info.height,
-              duration: clip.info.duration,
-            })}
-          </Badge>
-        )}
-      </div>
-      {!clip ? (
+    <div className="@container flex h-full min-h-0 flex-col gap-3">
+      {clip ? (
+        <>
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
+            <Badge variant="secondary" className="min-w-0">
+              <span className="truncate">{fileName}</span>
+            </Badge>
+            <span className="text-label text-muted-foreground uppercase">
+              {t("timeline.dims", {
+                width: clip.info.width,
+                height: clip.info.height,
+                duration: clip.info.duration,
+              })}
+            </span>
+          </div>
+
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="flex flex-col gap-3 pr-2.5">
+              <TimelineRibbon range={range} duration={duration} time={time} onScrub={onScrub} />
+
+              <div className="grid grid-rows-1 gap-3 @lg:grid-cols-2">
+                {/* Centred along the card's own height, so the transport sits
+                    against the middle of the settings card rather than at its
+                    top. */}
+                <Card title={t("timeline.transport")} className="justify-center">
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      aria-label={t("timeline.jumpStart")}
+                      title={t("timeline.jumpStart")}
+                      disabled={working}
+                      onClick={() => onJump(-1)}
+                    >
+                      <SkipBack />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      aria-label={t("timeline.stepBack")}
+                      title={t("timeline.stepBack")}
+                      disabled={working}
+                      onClick={() => onStep(-1)}
+                    >
+                      <StepBack />
+                    </Button>
+                    <Button
+                      variant={playing ? "accent" : "default"}
+                      size="icon-lg"
+                      aria-label={playing ? t("common.pause") : t("common.play")}
+                      title={playing ? t("common.pause") : t("common.play")}
+                      disabled={working}
+                      onClick={() => void togglePlay()}
+                    >
+                      {playing ? <Pause /> : <Play />}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      aria-label={t("timeline.stop")}
+                      title={t("timeline.stop")}
+                      disabled={working}
+                      onClick={stopPlayback}
+                    >
+                      <Square />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      aria-label={t("timeline.stepForward")}
+                      title={t("timeline.stepForward")}
+                      disabled={working}
+                      onClick={() => onStep(1)}
+                    >
+                      <StepForward />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="icon-sm"
+                      aria-label={t("timeline.jumpEnd")}
+                      title={t("timeline.jumpEnd")}
+                      disabled={working}
+                      onClick={() => onJump(1)}
+                    >
+                      <SkipForward />
+                    </Button>
+                    <Toggle
+                      variant="outline"
+                      size="icon-sm"
+                      pressed={loop}
+                      aria-label={t("timeline.loop")}
+                      title={t("timeline.loop")}
+                      disabled={working}
+                      onPressedChange={setLoop}
+                    >
+                      <Repeat />
+                    </Toggle>
+                  </div>
+                  <p className="text-caption text-muted-foreground">{transportLine}</p>
+                </Card>
+
+                <Card title={t("timeline.settings")}>
+                  <div className="flex flex-col gap-3">
+                    <div className="grid grid-cols-2 gap-2 @sm:grid-cols-3">
+                      <div className="flex flex-col gap-1">
+                        <Label htmlFor="range-in">{t("timeline.in")}</Label>
+                        <Input
+                          id="range-in"
+                          type="number"
+                          min={0}
+                          max={duration}
+                          step={0.1}
+                          value={range.start}
+                          onChange={(e) =>
+                            setRange((r) =>
+                              clampRange({ ...r, start: Number(e.target.value) }, duration),
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Label htmlFor="range-out">{t("timeline.out")}</Label>
+                        <Input
+                          id="range-out"
+                          type="number"
+                          min={0}
+                          max={duration}
+                          step={0.1}
+                          value={range.end}
+                          onChange={(e) =>
+                            setRange((r) =>
+                              clampRange({ ...r, end: Number(e.target.value) }, duration),
+                            )
+                          }
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Label htmlFor="fps">{t("timeline.fps")}</Label>
+                        <Select value={String(fps)} onValueChange={(v) => setFps(Number(v))}>
+                          <SelectTrigger id="fps">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[5, 8, 12, 15, 24, 30].map((f) => (
+                              <SelectItem key={f} value={String(f)}>
+                                {f}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                      <div className="flex items-center gap-2">
+                        <Switch id="temporal" checked={temporal} onCheckedChange={setTemporal} />
+                        <Label htmlFor="temporal">{t("timeline.temporal")}</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch id="full-res" checked={fullRes} onCheckedChange={setFullRes} />
+                        <Label htmlFor="full-res">{t("timeline.fullRes")}</Label>
+                      </div>
+                    </div>
+                    <DimensionGrid clip={clip} method={params.method} fullRes={fullRes} />
+                  </div>
+                </Card>
+              </div>
+
+              <p className="text-caption text-muted-foreground">{describeAudioStatus(audio, t)}</p>
+            </div>
+          </ScrollArea>
+        </>
+      ) : (
         <Empty>
           <EmptyHeader>
             <EmptyTitle>{t("timeline.empty")}</EmptyTitle>
             <EmptyDescription>{t("timeline.emptyHint")}</EmptyDescription>
           </EmptyHeader>
         </Empty>
-      ) : (
+      )}
+
+      {clip && (
         <>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Label id="scrub-label">Scrub {time.toFixed(2)}s</Label>
-              <Slider
-                aria-labelledby="scrub-label"
-                className="w-48"
-                min={0}
-                max={clip.info.duration}
-                step={0.05}
-                value={[time]}
-                onValueChange={([v]) => onScrub(v)}
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="range-in">{t("timeline.in")}</Label>
-              <Input
-                id="range-in"
-                type="number"
-                className="w-20"
-                min={0}
-                max={clip.info.duration}
-                step={0.1}
-                value={range.start}
-                onChange={(e) =>
-                  setRange((r) => clampRange({ ...r, start: Number(e.target.value) }, duration))
-                }
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="range-out">{t("timeline.out")}</Label>
-              <Input
-                id="range-out"
-                type="number"
-                className="w-20"
-                min={0}
-                max={clip.info.duration}
-                step={0.1}
-                value={range.end}
-                onChange={(e) =>
-                  setRange((r) => clampRange({ ...r, end: Number(e.target.value) }, duration))
-                }
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="fps">{t("timeline.fps")}</Label>
-              <Select value={String(fps)} onValueChange={(v) => setFps(Number(v))}>
-                <SelectTrigger id="fps" className="w-20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[5, 8, 12, 15, 24, 30].map((f) => (
-                    <SelectItem key={f} value={String(f)}>
-                      {f}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch id="temporal" checked={temporal} onCheckedChange={setTemporal} />
-              <Label htmlFor="temporal">{t("timeline.temporal")}</Label>
-            </div>
+          <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+            {live}
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Switch id="full-res" checked={fullRes} onCheckedChange={setFullRes} />
-              <Label htmlFor="full-res">{t("timeline.fullRes")}</Label>
-            </div>
-            {exportDim && workingDim && (
-              <Badge variant="secondary">
-                Source {clip.info.width}×{clip.info.height} · Working {workingDim.width}×
-                {workingDim.height} · Export {exportDim.width}×{exportDim.height}
-              </Badge>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              variant="secondary"
-              size="icon-sm"
-              aria-label={t("timeline.jumpStart")}
-              disabled={working}
-              onClick={() => onJump(-1)}
-            >
-              <SkipBack />
-            </Button>
-            <Button
-              variant="secondary"
-              size="icon-sm"
-              aria-label={t("timeline.stepBack")}
-              disabled={working}
-              onClick={() => onStep(-1)}
-            >
-              <StepBack />
-            </Button>
-            <Button
-              variant="secondary"
-              size="icon-sm"
-              aria-label={playing ? t("common.pause") : t("common.play")}
-              disabled={working}
-              onClick={() => void togglePlay()}
-            >
-              {playing ? <Pause /> : <Play />}
-            </Button>
-            <Button
-              variant="secondary"
-              size="icon-sm"
-              aria-label={t("timeline.stop")}
-              disabled={working}
-              onClick={stopPlayback}
-            >
-              <Square />
-            </Button>
-            <Button
-              variant="secondary"
-              size="icon-sm"
-              aria-label={t("timeline.stepForward")}
-              disabled={working}
-              onClick={() => onStep(1)}
-            >
-              <StepForward />
-            </Button>
-            <Button
-              variant="secondary"
-              size="icon-sm"
-              aria-label={t("timeline.jumpEnd")}
-              disabled={working}
-              onClick={() => onJump(1)}
-            >
-              <SkipForward />
-            </Button>
-            <Button
-              variant="secondary"
-              size="icon-sm"
-              aria-label={t("timeline.loop")}
-              aria-pressed={loop}
-              disabled={working}
-              onClick={() => setLoop((current) => !current)}
-            >
-              <Repeat />
-            </Button>
-            <Badge variant="secondary">{transportLine}</Badge>
-          </div>
-          <p className="text-label text-muted-foreground">{describeAudioStatus(audio, t)}</p>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              disabled={working || !canExportMp4()}
-              title={canExportMp4() ? undefined : t("timeline.noWebcodecs")}
-              onClick={() => void runExport("mp4")}
-            >
-              {t("timeline.exportMp4")}
-            </Button>
-            <Button disabled={working} variant="secondary" onClick={() => void runExport("gif")}>
-              {t("timeline.exportGif")}
-            </Button>
-            {working && (
-              <Button variant="outline" onClick={cancelExport}>
-                {t("common.cancel")}
+          {/* The export row is pinned below the scroll, so the action stays put
+              whatever the panel is doing above it. */}
+          <div className="flex shrink-0 flex-col gap-2 border-t border-border pt-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                disabled={working || !canExportMp4()}
+                title={canExportMp4() ? undefined : t("timeline.noWebcodecs")}
+                onClick={() => void runExport("mp4")}
+              >
+                {t("timeline.exportMp4")}
               </Button>
-            )}
-            {working && totalCount > 0 && (
-              <div aria-busy className="flex flex-wrap items-center gap-3">
-                <Progress
-                  aria-label={t("timeline.progress")}
-                  value={Math.min(100, shown)}
-                  max={100}
-                  className="w-48"
-                />
-                <Badge aria-hidden variant="secondary">
+              <Button disabled={working} variant="secondary" onClick={() => void runExport("gif")}>
+                {t("timeline.exportGif")}
+              </Button>
+              {working && (
+                <Button variant="outline" onClick={cancelExport}>
+                  {t("common.cancel")}
+                </Button>
+              )}
+              {working && totalCount > 0 && (
+                <Badge aria-hidden variant="secondary" className="ml-auto">
                   {doneCount}/{totalCount}
                   {eta ? ` · ${eta}` : ""}
                 </Badge>
-              </div>
+              )}
+            </div>
+            {working && (
+              <Progress
+                aria-label={t("timeline.progress")}
+                value={Math.min(100, shown)}
+                max={100}
+              />
             )}
             {phase && !error && !working && (
               <Badge aria-hidden variant="secondary">
                 {phase}
               </Badge>
             )}
+            {error && (
+              <Alert variant="destructive">
+                <AlertTitle>{t("timeline.exportFailed")}</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
           </div>
-          <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
-            {live}
-          </div>
-          {error && (
-            <Alert variant="destructive">
-              <AlertTitle>{t("timeline.exportFailed")}</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
         </>
       )}
     </div>

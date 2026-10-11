@@ -87,6 +87,9 @@ const KNOWN: Record<string, string | number> = {
   target: "Downloads",
   stem: "clip",
   message: "offline",
+  file: "dither.png",
+  start: "1.5",
+  end: "8.0",
 };
 
 function valuesFor(id: MessageId): Record<string, string | number> {
