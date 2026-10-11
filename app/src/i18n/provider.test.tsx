@@ -47,36 +47,32 @@ describe("I18nProvider", () => {
   });
 
   it("ignores a stored value that is not a language it ships", () => {
-    // A stale or tampered key falls back to detection rather than rendering
+    // A stale or tampered key falls back to the default rather than rendering
     // every label blank.
     const markup = render(windowWithStorage("klingon"));
     expect(markup).toContain(`en:${MESSAGES.en["status.ready"]}`);
   });
 
-  it("falls back to the browser's language when nothing is stored", () => {
+  it("opens in English on a first launch, whatever the browser speaks", () => {
+    // The browser's language is deliberately not consulted: a guess is a guess,
+    // and a French visitor has to undo it on every fresh install. English is the
+    // language this project's readers already read.
+    for (const language of ["fr-FR", "es", "ja", "en-GB"]) {
+      const markup = render({
+        localStorage: windowWithStorage(null).localStorage,
+        navigator: { language, languages: [language] },
+      });
+      expect(markup, language).toContain(`en:${MESSAGES.en["status.ready"]}`);
+    }
+  });
+
+  it("still opens in the language a returning user chose", () => {
+    // The detection rule only ever decides a first launch; a saved choice wins.
     const markup = render({
-      localStorage: windowWithStorage(null).localStorage,
-      navigator: { language: "fr-FR", languages: ["fr-FR"] },
+      localStorage: windowWithStorage("fr").localStorage,
+      navigator: { language: "en-US", languages: ["en-US"] },
     });
     expect(markup).toContain(`fr:${MESSAGES.fr["status.ready"]}`);
-  });
-
-  it("reads the browser's language through the window, not the runtime's", () => {
-    // Node has a global `navigator` of its own, so a bare reference resolves to
-    // that and every first-time visitor would be served English.
-    const markup = render({
-      localStorage: windowWithStorage(null).localStorage,
-      navigator: { language: "es", languages: ["es"] },
-    });
-    expect(markup).toContain(`en:${MESSAGES.en["status.ready"]}`);
-  });
-
-  it("falls back to English for a language it does not ship", () => {
-    const markup = render({
-      localStorage: windowWithStorage(null).localStorage,
-      navigator: { language: "ja", languages: ["ja"] },
-    });
-    expect(markup).toContain(`en:${MESSAGES.en["status.ready"]}`);
   });
 
   it("survives storage that refuses to be read", () => {
@@ -88,7 +84,6 @@ describe("I18nProvider", () => {
         },
         setItem: () => {},
       },
-      navigator: { language: "en", languages: ["en"] },
     });
     expect(markup).toContain(`en:${MESSAGES.en["status.ready"]}`);
   });

@@ -44,20 +44,18 @@ function readStored(): Locale | null {
   }
 }
 
-/** The browser's language, reduced to something this build ships. */
-function detect(): Locale {
+/**
+ * The language the app opens in: the last one chosen, otherwise English.
+ *
+ * The browser's own language is deliberately not consulted. Guessing the
+ * language from a request header is a guess, and a user who wanted French had to
+ * undo the guess every fresh install; English is the one language every visitor
+ * to this project reads. A saved choice always wins, so this only ever decides a
+ * first launch.
+ */
+function initialLocale(): Locale {
   if (typeof window === "undefined") return DEFAULT_LOCALE;
-  const stored = readStored();
-  if (stored) return stored;
-  // Read through the window rather than the bare global: node has its own
-  // `navigator`, so a free reference reads that instead of the browser's and
-  // the fallback would silently be English everywhere.
-  const tags = window.navigator?.languages ?? [window.navigator?.language ?? ""];
-  for (const tag of tags) {
-    const base = tag.toLowerCase().split("-")[0];
-    if (LOCALES.includes(base as Locale)) return base as Locale;
-  }
-  return DEFAULT_LOCALE;
+  return readStored() ?? DEFAULT_LOCALE;
 }
 
 interface I18nValue {
@@ -73,7 +71,7 @@ const LocaleContext = createContext<I18nValue>({
 export function I18nProvider({ children }: { children: ReactNode }) {
   // Read during the first render, not in an effect: a language chosen earlier
   // has to be on screen from the first paint, or the app flickers.
-  const [locale, setLocale] = useState<Locale>(detect);
+  const [locale, setLocale] = useState<Locale>(initialLocale);
 
   useEffect(() => {
     try {
