@@ -2,8 +2,17 @@
 // bridge and the update feed. No business logic lives here; the app in dist/
 // does the work.
 const { app, BrowserWindow, dialog, ipcMain, session } = require("electron");
+const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+
+// Dev runs load straight from source, so the packaged executable's icon is not
+// there to fall back on. Point the window (and the macOS dock) at the source
+// icon when it exists; in a packaged build the OS-level icon takes over.
+function appIconPath() {
+  const candidate = path.join(__dirname, "build", "icon.png");
+  return fs.existsSync(candidate) ? candidate : undefined;
+}
 
 const { createBridge } = require("./lib/bridge");
 const { hardenSession, restrictWebContents, webPreferences } = require("./lib/security");
@@ -26,6 +35,7 @@ function createWindow() {
     height: 860,
     backgroundColor: "#ffffff",
     autoHideMenuBar: true,
+    icon: appIconPath(),
     webPreferences: webPreferences(PRELOAD),
   });
   mainWindow.on("closed", () => {
@@ -73,6 +83,12 @@ app.whenReady().then(() => {
     ipcMain,
   );
   updaterFor();
+  // The packaged binary carries its own icon; in dev, restore the project icon
+  // on the macOS dock instead of the Electron default.
+  if (process.platform === "darwin" && app.dock) {
+    const icon = appIconPath();
+    if (icon) app.dock.setIcon(icon);
+  }
   createWindow();
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
