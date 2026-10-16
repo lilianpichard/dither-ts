@@ -8,6 +8,7 @@ import {
   frameRect,
   isIdentity,
   nextQuarterTurn,
+  operatedFrameSize,
   operationsKey,
   requestOperations,
   sanitizeCrop,
@@ -169,5 +170,44 @@ describe("nextQuarterTurn", () => {
     expect(nextQuarterTurn(180)).toBe(270);
     expect(nextQuarterTurn(270)).toBe(0);
     expect(nextQuarterTurn(undefined)).toBe(90);
+  });
+});
+
+describe("operatedFrameSize", () => {
+  it("keeps the frame size for identity and half turns", () => {
+    expect(operatedFrameSize(800, 600, {})).toEqual({ width: 800, height: 600 });
+    expect(operatedFrameSize(800, 600, { rotate: 180 })).toEqual({ width: 800, height: 600 });
+  });
+
+  it("swaps the sides for quarter turns, in both directions", () => {
+    expect(operatedFrameSize(800, 600, { rotate: 90 })).toEqual({ width: 600, height: 800 });
+    expect(operatedFrameSize(800, 600, { rotate: 270 })).toEqual({ width: 600, height: 800 });
+  });
+
+  it("reads the frame the crop leaves, not the source", () => {
+    expect(
+      operatedFrameSize(800, 600, { crop: { x: 10, y: 20, width: 400, height: 300 } }),
+    ).toEqual({ width: 400, height: 300 });
+  });
+
+  it("turns the cropped frame, because the crop runs first", () => {
+    expect(
+      operatedFrameSize(800, 600, {
+        crop: { x: 10, y: 20, width: 400, height: 300 },
+        rotate: 90,
+      }),
+    ).toEqual({ width: 300, height: 400 });
+  });
+
+  it("clamps the crop to the frame the way the worker will", () => {
+    expect(operatedFrameSize(32, 32, { crop: { x: 30, y: 28, width: 200, height: 200 } })).toEqual({
+      width: 2,
+      height: 4,
+    });
+  });
+
+  it("ignores values the worker would reject", () => {
+    expect(operatedFrameSize(800, 600, { rotate: 45 })).toEqual({ width: 800, height: 600 });
+    expect(operatedFrameSize(800, 600, undefined)).toEqual({ width: 800, height: 600 });
   });
 });

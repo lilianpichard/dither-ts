@@ -65,3 +65,17 @@ describe("the preview toolbar", () => {
     expect(empty({ display: null, compare: null, geometry: null })).toContain('role="img"');
   });
 });
+
+describe("the compare control", () => {
+  it("is dead when the compare bitmap does not share the geometry, like a turned frame", () => {
+    // Holding C on a rotated result would otherwise paint the unrotated source
+    // squeezed into the turned frame, so the control says there is nothing to
+    // compare against until the shapes agree again.
+    const markup = empty({
+      compare: { width: 8, height: 6, pixels: new ArrayBuffer(4) },
+      geometry: { width: 6, height: 8, pixels: new ArrayBuffer(4) },
+    });
+    expect(markup).toContain('aria-label="Compare with original"');
+    expect(markup).toContain('title="Nothing to compare against"');
+  });
+});

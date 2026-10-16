@@ -5,7 +5,7 @@ import { cancelAll, renderImage } from "./worker/client";
 import { stripKeys } from "./presets/store";
 import { resolveColorMode, useApp } from "./store";
 import { describeRenderStatus } from "./status";
-import { requestOperations, scaleOperations } from "./image/settings";
+import { requestOperations, operatedFrameSize, scaleOperations } from "./image/settings";
 import { MAX_HEAVY_PREVIEW_DIM, fitSize, isHeavyMethod } from "./video/jobs";
 import PreviewSurface from "./preview/PreviewSurface";
 import ControlPanel from "./components/ControlPanel";
@@ -293,6 +293,13 @@ export default function App() {
   }, []);
 
   const shown = preview ?? result;
+  // The space the still preview's view is expressed in: the source after its
+  // geometry operations. Only the dimensions matter, so a freshly built object
+  // is exactly what the surface documents — and it is what keeps a rotated
+  // result from being fitted and painted in the unrotated frame's aspect.
+  const operatedSource = source
+    ? { ...source, ...operatedFrameSize(source.width, source.height, operations) }
+    : null;
   // The video timeline publishes its current frame, and one canvas serves both
   // subjects: whichever has published last owns the preview.
   const video = useApp((state) => state.videoPreview);
@@ -510,7 +517,7 @@ export default function App() {
                   <PreviewSurface
                     display={video ? video.display : shown}
                     compare={video ? video.compare : source}
-                    geometry={video ? video.geometry : source}
+                    geometry={video ? video.geometry : operatedSource}
                     resetKey={video ? video.clipKey : source}
                     label={video ? t("preview.video") : t("preview.image")}
                     onClear={() => clearMedia()}

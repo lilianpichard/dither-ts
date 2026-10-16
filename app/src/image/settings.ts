@@ -168,6 +168,24 @@ export function requestOperations(
   return isIdentity(fitted) ? undefined : fitted;
 }
 
+/**
+ * Frame dimensions after the geometry operations, mirroring the worker's
+ * order: the crop cuts in source space, then the quarter turn swaps the sides.
+ * This is the space the preview surface must fit and paint in, so a rotated
+ * result does not land stretched inside the unrotated frame.
+ */
+export function operatedFrameSize(
+  width: number,
+  height: number,
+  operations: unknown,
+): { width: number; height: number } {
+  const clean = fitOperations(operations, width, height);
+  const w = clean.crop?.width ?? width;
+  const h = clean.crop?.height ?? height;
+  if (clean.rotate === 90 || clean.rotate === 270) return { width: h, height: w };
+  return { width: w, height: h };
+}
+
 /** Stable key for change detection; identity for equivalent payloads. */
 export function operationsKey(operations: unknown): string {
   const clean = sanitizeOperations(operations);

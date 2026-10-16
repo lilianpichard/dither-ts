@@ -3,7 +3,7 @@ import { Eye, Maximize, X, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "cn";
 import { useTranslate } from "../i18n";
 import { frameToCanvas, type Frame } from "./frame";
-import { fitView, type View } from "./canvasFit";
+import { fitView, matchesGeometry, type View } from "./canvasFit";
 
 function isTypingTarget(t: EventTarget | null): boolean {
   return (
@@ -112,9 +112,15 @@ export default function PreviewSurface({
   if (display) heldRef.current = { w: geoW, h: geoH, frame: display };
 
   const displayCanvas = useMemo(() => (live ? frameToCanvas(live) : null), [live]);
-  const compareCanvas = useMemo(() => (compare ? frameToCanvas(compare) : null), [compare]);
+  // Compare is only offered while its bitmap shares the geometry space. A
+  // source held against a turned frame would be rescaled into the wrong
+  // aspect, so it is not something that can be painted in this view at all.
+  const canCompare = matchesGeometry(compare, geoW, geoH);
+  const compareCanvas = useMemo(
+    () => (canCompare && compare !== null ? frameToCanvas(compare) : null),
+    [canCompare, compare],
+  );
 
-  const canCompare = compareCanvas !== null;
   const active = comparing && canCompare ? compareCanvas : (displayCanvas ?? compareCanvas);
 
   const fitTo = useCallback(() => {

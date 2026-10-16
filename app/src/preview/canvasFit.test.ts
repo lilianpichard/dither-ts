@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { META_INSET, fitView } from "./canvasFit";
+import { META_INSET, fitView, matchesGeometry } from "./canvasFit";
 
 describe("fitView", () => {
   it("scales to the tighter of the two axes so the image always fits", () => {
@@ -35,5 +35,23 @@ describe("fitView", () => {
   it("accepts a custom inset", () => {
     expect(fitView(1000, 500, 100, 100, 0).scale).toBeCloseTo(5);
     expect(fitView(1000, 500, 100, 100, 100).scale).toBeCloseTo(4);
+  });
+});
+
+describe("matchesGeometry", () => {
+  it("accepts a bitmap that covers exactly the viewport it is painted into", () => {
+    expect(matchesGeometry({ width: 600, height: 800 }, 600, 800)).toBe(true);
+  });
+
+  it("refuses a bitmap of a different shape, so a turn is not stretched away", () => {
+    // The classic case: an unrotated source against a turned frame. Painting it
+    // would rescale the pixels into the wrong aspect and move nothing else.
+    expect(matchesGeometry({ width: 800, height: 600 }, 600, 800)).toBe(false);
+    expect(matchesGeometry({ width: 800, height: 600 }, 800, 600)).toBe(true);
+  });
+
+  it("refuses a missing bitmap or an unmeasured viewport", () => {
+    expect(matchesGeometry(null, 600, 800)).toBe(false);
+    expect(matchesGeometry({ width: 600, height: 800 }, 0, 0)).toBe(false);
   });
 });

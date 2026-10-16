@@ -35,6 +35,7 @@ import { describeAudioStatus, probeAudioCapture } from "./audio";
 import { exportGif } from "./exportGif";
 import { canExportMp4, exportMp4, type ExportFrame } from "./exportMp4";
 import { frameOperations } from "./operations";
+import { operatedFrameSize } from "../image/settings";
 import { orderedAsyncPipeline } from "./pipeline";
 import { playheadPercent, spanPercent } from "./ribbon";
 import { MAX_FULL_RES_DIM, clampRange, fitSize, planFrames, planMaxDim, previewSize } from "./jobs";
@@ -307,9 +308,14 @@ export default function Timeline({ active = true }: { active?: boolean }) {
     // the frame kept for compare has to be a separate copy that is never handed
     // over. Reusing `copy` here left the published compare frame detached.
     const comparePixels = new Uint8ClampedArray(raw.data);
+    const ops = frameOperations(operations, clip.info, size);
+    // The view space is the frame the worker returns, not the capture: a turn
+    // swaps the sides, and fitting the capture's aspect around the turned
+    // result is what used to squash it. Only the dimensions are read from here.
+    const turned = operatedFrameSize(size.width, size.height, ops);
     const geometry: Frame = {
-      width: size.width,
-      height: size.height,
+      width: turned.width,
+      height: turned.height,
       pixels: comparePixels.buffer as ArrayBuffer,
     };
     const copy = new Uint8ClampedArray(comparePixels).buffer as ArrayBuffer;
@@ -325,7 +331,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
         palette: params.palette,
         pixelSize: previewPixelSize(params, clip.info, size),
         effects: stripKeys(effects),
-        operations: frameOperations(operations, clip.info, size),
+        operations: ops,
         seed: temporal ? Math.round(t * fps) : 0,
       },
       [copy],
@@ -333,9 +339,9 @@ export default function Timeline({ active = true }: { active?: boolean }) {
     );
     if (mySeq !== previewSeq.current || controller.signal.aborted) return;
     // The shared preview surface owns the canvas, so publish the frame instead of
-    // painting here. `geometry` is the preview size, which is constant for a clip:
-    // that keeps the surface's zoom still while frames stream in, and makes 100%
-    // mean one preview pixel per screen pixel.
+    // painting here. `geometry` is the preview size after the operations, constant
+    // for a clip until they change: that keeps the surface's zoom still while
+    // frames stream in, and makes 100% mean one preview pixel per screen pixel.
     const published: VideoPreview = {
       display: { width: res.width, height: res.height, pixels: res.pixels },
       compare: geometry,
