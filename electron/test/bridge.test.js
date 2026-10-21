@@ -542,7 +542,7 @@ describe("bridge save", () => {
   test("keeps a name that merely looks dangerous", async () => {
     const { bridge, dialog, event } = harness();
     const out = await fs.mkdtemp(path.join(os.tmpdir(), "dither-out-"));
-    const awkward = "<script>alert(1)<script>.png";
+    const awkward = "alert(1).png";
     dialog.queueOpen({ canceled: false, filePaths: [out] });
     const { handle } = await bridge.handlers[CHANNELS.pickDirectory](event);
     await bridge.handlers[CHANNELS.save](event, {
@@ -552,6 +552,25 @@ describe("bridge save", () => {
     });
     // Nothing is escaped or rewritten: the name is the one that was asked for.
     assert.deepEqual(await fs.readdir(out), [awkward]);
+    await fs.rm(out, { recursive: true, force: true });
+  });
+
+  test("refuses characters Windows cannot store in a file name", async () => {
+    const { bridge, dialog, event } = harness();
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "dither-out-"));
+    dialog.queueOpen({ canceled: false, filePaths: [out] });
+    const { handle } = await bridge.handlers[CHANNELS.pickDirectory](event);
+    for (const name of ["a<b.png", "a>b.png", "a:b.png", "a|b.png", "a?b.png", "a*b.png"]) {
+      await assert.rejects(
+        bridge.handlers[CHANNELS.save](event, {
+          name,
+          bytes: new Uint8Array(PNG),
+          directory: handle,
+        }),
+        TypeError,
+      );
+    }
+    assert.deepEqual(await fs.readdir(out), []);
     await fs.rm(out, { recursive: true, force: true });
   });
 

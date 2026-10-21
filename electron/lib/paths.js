@@ -121,6 +121,9 @@ function safeFileName(name) {
   if (name.length > 255) throw new TypeError("file name is too long");
   // oxlint-disable-next-line no-control-regex -- control bytes are exactly what is being refused
   if (/[\u0000-\u001f\u007f]/.test(name)) throw new TypeError("file name has control characters");
+  // These are invalid on Windows and the app ships a Windows build, so reject
+  // them everywhere rather than produce a name that only fails at write time.
+  if (/[<>:"|?*]/.test(name)) throw new TypeError("file name has characters Windows cannot store");
   if (name === "." || name === "..") throw new TypeError("file name is a directory reference");
   if (path.basename(name) !== name) throw new TypeError("file name must not contain a path");
   if (path.isAbsolute(name) || name.includes("/") || name.includes("\\")) {

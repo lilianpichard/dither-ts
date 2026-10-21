@@ -102,7 +102,7 @@ describe("saveExtensionFor", () => {
 
 describe("safeFileName", () => {
   test("passes an ordinary name straight through", () => {
-    for (const name of ["a.dither.png", "shot 1.jpeg", "<odd>.png", "..hidden", "a.tar.gz"]) {
+    for (const name of ["a.dither.png", "shot 1.jpeg", "..hidden", "a.tar.gz"]) {
       assert.equal(safeFileName(name), name);
     }
   });
@@ -119,6 +119,12 @@ describe("safeFileName", () => {
       "C:\\win.png",
       "a\u0000b.png",
       "a\nb.png",
+      "<odd>.png",
+      "a<b>.png",
+      "a:b.png",
+      "a|b.png",
+      "a?b.png",
+      "a*b.png",
       `x${"y".repeat(255)}.png`,
     ];
     for (const name of bad) assert.throws(() => safeFileName(name), TypeError, `accepted ${name}`);

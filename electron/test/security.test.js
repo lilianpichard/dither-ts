@@ -104,7 +104,9 @@ describe("the app document url", () => {
   test("matches the url the window actually loaded", () => {
     const doc = "/opt/dither-ts/electron/dist/index.html";
     const url = documentUrl(doc);
-    assert.equal(url, "file:///opt/dither-ts/electron/dist/index.html");
+    // The exact spelling depends on the platform (Windows resolves the same
+    // path to a drive letter), so compare against the URL the loader builds.
+    assert.equal(url, pathToFileURL(doc).href);
     assert.equal(isAppUrl(url, url), true);
     assert.equal(isAppUrl(`${url}#batch`, url), true);
   });
