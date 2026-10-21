@@ -44,6 +44,11 @@ describe("ordered family", () => {
     assert.deepEqual(Array.from(orderedBW(img, "Bayer 4x4", 255)), [0, 0, 0, 0]);
   });
 
+  it("shifts matrix methods in matrix space, without a seam", () => {
+    const out = orderedBW(gray(fill(5, 150), 5, 1), "Bayer 2x2", 128, 1);
+    assert.deepEqual(Array.from(out), [255, 0, 255, 0, 255]);
+  });
+
   it("Crosshatch field origin is exactly 128", () => {
     assert.equal(crosshatchField(4, 4)[0][0], 128);
   });

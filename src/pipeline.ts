@@ -375,6 +375,9 @@ export function ditherColor(
   if (options.mask !== undefined) assertPixelMask(options.mask, width, height);
   const method = options.method ?? "Floyd-Steinberg";
   assertMethod(method, "color");
+  if (options.colorMode === "original") {
+    return ditherOriginal(rgb, width, height, options);
+  }
   const palette = resolvePalette(options.palette ?? DEFAULT_PALETTE);
   const seed = options.seed ?? 0;
   const onProgress = options.onProgress;
@@ -419,8 +422,10 @@ export function ditherOriginal(
   height: number,
   options: DitherOptions = {},
 ): Uint8ClampedArray {
+  assertDitherOptions(options);
   assertRGBBuffer(rgb, width, height);
   assertDimensions(width, height);
+  if (options.palette !== undefined) resolvePalette(options.palette);
   const method = options.method ?? "Floyd-Steinberg";
   assertMethod(method, "color");
   const seed = options.seed ?? 0;
@@ -455,6 +460,8 @@ export function ditherRGBA(image: RGBAImage, options: DitherRGBAOptions): Uint8C
   assertMethod(method, color ? "color" : "bw");
   const palette = resolvePalette(ditherOptions.palette ?? DEFAULT_PALETTE);
   if (method === "None") {
+    // None is the identity, so it returns the source RGBA whatever `color`
+    // says; callers use it to exercise operations or preview a frame untouched.
     const out = image.data.slice();
     onProgress?.(image.height, image.height, out, image.width, image.height);
     return out;

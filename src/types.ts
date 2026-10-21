@@ -16,7 +16,7 @@ export interface GrayImage {
 export interface RGBImage {
   width: number;
   height: number;
-  data: Float32Array;
+  data: Uint8ClampedArray;
 }
 
 /** Packed RGBA image. data length = width*height*4, values 0..255. */

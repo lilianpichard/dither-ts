@@ -391,7 +391,8 @@ export const SPECIAL_DIFFUSION: Readonly<Record<SpecialDiffusionMethod, SpecialD
 
 /**
  * Palette error-diffusion on RGB input. The accumulator is clipped to
- * 0..255 on every spread. Returns packed RGB bytes; every pixel is a palette member.
+ * 0..255 on every spread. Returns packed RGB bytes; active pixels are palette
+ * members and masked pixels are left at zero.
  */
 export function diffusePalette(
   rgb: Uint8ClampedArray,

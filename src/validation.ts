@@ -167,20 +167,28 @@ export function nearestVisibleRGBA(
   }
   while (head < tail) {
     const source = queue[head++];
+    // Every pixel stores the visible seed it was reached from, not the
+    // transparent neighbour that reached it. Copying that seed at the end is
+    // then independent of the direction the frontier grew in.
+    const seed = nearest[source];
     const x = source % width;
     const y = Math.floor(source / width);
-    if (x > 0 && nearest[source - 1] === -1) nearest[source - 1] = source;
-    if (x + 1 < width && nearest[source + 1] === -1) nearest[source + 1] = source;
-    if (y > 0 && nearest[source - width] === -1) nearest[source - width] = source;
-    if (y + 1 < height && nearest[source + width] === -1) nearest[source + width] = source;
-    const left = source - 1;
-    const right = source + 1;
-    const up = source - width;
-    const down = source + width;
-    if (x > 0 && nearest[left] === source) queue[tail++] = left;
-    if (x + 1 < width && nearest[right] === source) queue[tail++] = right;
-    if (y > 0 && nearest[up] === source) queue[tail++] = up;
-    if (y + 1 < height && nearest[down] === source) queue[tail++] = down;
+    if (x > 0 && nearest[source - 1] === -1) {
+      nearest[source - 1] = seed;
+      queue[tail++] = source - 1;
+    }
+    if (x + 1 < width && nearest[source + 1] === -1) {
+      nearest[source + 1] = seed;
+      queue[tail++] = source + 1;
+    }
+    if (y > 0 && nearest[source - width] === -1) {
+      nearest[source - width] = seed;
+      queue[tail++] = source - width;
+    }
+    if (y + 1 < height && nearest[source + width] === -1) {
+      nearest[source + width] = seed;
+      queue[tail++] = source + width;
+    }
   }
   for (let i = 0; i < width * height; i++) {
     if (out[i * 4 + 3] !== 0) continue;

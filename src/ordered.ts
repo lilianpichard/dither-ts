@@ -27,6 +27,31 @@ function seedOffset(seed: number): number {
   return ((seed % 64) + 64) % 64;
 }
 
+/**
+ * Threshold value at one pixel, with the seed applied. Matrix methods wrap in
+ * matrix space, so a seed never introduces a seam where the image width is not
+ * a multiple of the matrix. The two procedural fields are image-sized and keep
+ * wrapping against the image.
+ */
+function fieldSampler(
+  method: OrderedMethod,
+  w: number,
+  h: number,
+  seed: number,
+): (x: number, y: number) => number {
+  const ox = seedOffset(seed);
+  const oy = seedOffset(Math.floor(seed / 64));
+  if (method === "Crosshatch" || method === "Blue-Noise Mask") {
+    const field = orderedField(method, w, h);
+    return (x, y) => field[(y + oy) % h][(x + ox) % w];
+  }
+  assertMethodFamily(method, "ordered");
+  const mat = ORDERED_MATRICES[method];
+  const mh = mat.length;
+  const mw = mat[0].length;
+  return (x, y) => mat[(y + oy) % mh][(x + ox) % mw];
+}
+
 /** Resolve the threshold field for any ordered-family method. */
 export function orderedField(method: OrderedMethod, w: number, h: number): number[][] {
   assertMethodFamily(method, "ordered");
@@ -61,19 +86,14 @@ export function orderedBW(
   const { width: w, height: h } = img;
   const progress = resolveRowOrMask(onRowOrMask, mask, w, h);
   const activeMask = progress.mask;
-  const field = orderedField(method, w, h);
+  const sample = fieldSampler(method, w, h, seed);
   const gain = 1 - threshold / 255;
-  const ox = seedOffset(seed);
-  const oy = seedOffset(Math.floor(seed / 64));
   const out = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = y * w + x;
       if (activeMask && activeMask[i] === 0) continue;
-      out[i] = quantizeBW(
-        img.data[i] + (field[(y + oy) % h][(x + ox) % w] - 128) * gain,
-        threshold,
-      );
+      out[i] = quantizeBW(img.data[i] + (sample(x, y) - 128) * gain, threshold);
     }
     progress.onRow?.(y + 1, h, out, w, h);
   }
@@ -102,15 +122,13 @@ export function orderedPalette(
   assertSeed(seed);
   const progress = resolveRowOrMask(onRowOrMask, mask, width, height);
   const activeMask = progress.mask;
-  const field = orderedField(method, width, height);
-  const ox = seedOffset(seed);
-  const oy = seedOffset(Math.floor(seed / 64));
+  const sample = fieldSampler(method, width, height, seed);
   const out = new Uint8ClampedArray(width * height * 3);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
       if (activeMask && activeMask[i] === 0) continue;
-      const noise = (field[(y + oy) % height][(x + ox) % width] - 128) * PALETTE_ORDERED_GAIN;
+      const noise = (sample(x, y) - 128) * PALETTE_ORDERED_GAIN;
       const r = Math.min(255, Math.max(0, rgb[i * 3] + noise));
       const g = Math.min(255, Math.max(0, rgb[i * 3 + 1] + noise));
       const b = Math.min(255, Math.max(0, rgb[i * 3 + 2] + noise));
@@ -154,9 +172,7 @@ export function orderedOriginal(
   assertSeed(seed);
   const progress = resolveRowOrMask(onRowOrMask, mask, width, height);
   const activeMask = progress.mask;
-  const field = orderedField(method, width, height);
-  const ox = seedOffset(seed);
-  const oy = seedOffset(Math.floor(seed / 64));
+  const sample = fieldSampler(method, width, height, seed);
   const out = new Uint8ClampedArray(width * height * 3);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -167,7 +183,7 @@ export function orderedOriginal(
         out[i * 3 + 2] = rgb[i * 3 + 2];
         continue;
       }
-      const noise = (field[(y + oy) % height][(x + ox) % width] - 128) * ORIGINAL_ORDERED_GAIN;
+      const noise = (sample(x, y) - 128) * ORIGINAL_ORDERED_GAIN;
       for (let c = 0; c < 3; c++) {
         const v = rgb[i * 3 + c] + noise;
         out[i * 3 + c] = Math.round(Math.round(v / ORIGINAL_STEP) * ORIGINAL_STEP);

@@ -4,6 +4,7 @@ import {
   DEFAULT_PALETTE,
   ditherColor,
   ditherGray,
+  ditherOriginal,
   ditherRGBA,
   downscaleGray,
   effectivePixelSize,
@@ -21,6 +22,7 @@ import {
   type DitherRGBAOptions,
   type GrayImage,
   type RGBAImage,
+  type RGBImage,
 } from "../src/types.js";
 import { METHOD_REGISTRY, getMethod } from "../src/methods.js";
 import { ditherRGBA as exportedDitherRGBA } from "../src/index.js";
@@ -355,6 +357,22 @@ describe("ditherColor", () => {
     assert.equal(out.length, 16 * 3);
     assert.ok(membersOf(out, PALETTES["B&W"]));
   });
+
+  it("honours colorMode original without requiring a palette", () => {
+    const pixels = new Uint8ClampedArray([255, 100, 20]);
+    const original = ditherColor(pixels, 1, 1, {
+      method: "Bayer 4x4",
+      colorMode: "original",
+    });
+    assert.deepEqual(
+      Array.from(original),
+      Array.from(
+        ditherOriginal(pixels, 1, 1, {
+          method: "Bayer 4x4",
+        }),
+      ),
+    );
+  });
 });
 
 describe("ditherRGBA", () => {
@@ -366,7 +384,7 @@ describe("ditherRGBA", () => {
     assert.equal(exportedDitherRGBA, ditherRGBA);
   });
 
-  it("None passes every source byte through untouched", () => {
+  it("None passes every source byte through untouched in colour mode", () => {
     const image = rgba([1, 2, 3, 4, 250, 251, 252, 253], 2, 1);
     const out = ditherRGBA(image, { color: true, method: "None", pixelSize: 2 });
     assert.deepEqual(Array.from(out), Array.from(image.data));
@@ -496,5 +514,22 @@ describe("ditherRGBA", () => {
     assert.throws(() =>
       ditherRGBA(rgba([0, 0, 0, 0], 1, 1), { color: "yes" as unknown as boolean }),
     );
+  });
+});
+
+describe("RGBImage", () => {
+  it("uses the byte buffer the RGB APIs accept", () => {
+    const image: RGBImage = { width: 1, height: 1, data: new Uint8ClampedArray([1, 2, 3]) };
+    const out = ditherColor(image.data, image.width, image.height, { method: "None" });
+    assert.deepEqual(Array.from(out), [1, 2, 3]);
+  });
+});
+
+describe("ditherOriginal", () => {
+  it("validates the shared dither options", () => {
+    const rgb = new Uint8ClampedArray([10, 20, 30]);
+    assert.throws(() => ditherOriginal(rgb, 1, 1, { palette: "Nope" }));
+    assert.throws(() => ditherOriginal(rgb, 1, 1, { seed: 0.5 }));
+    assert.throws(() => ditherOriginal(rgb, 1, 1, { colorMode: "rainbow" as never }));
   });
 });

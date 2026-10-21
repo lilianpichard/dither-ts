@@ -7,6 +7,7 @@ import {
   defaultEffectParams,
   type EffectInstance,
 } from "../src/effects.js";
+import { nearestVisibleRGBA } from "../src/validation.js";
 
 function rgba(values: number[], w: number, h: number): Uint8ClampedArray {
   const out = new Uint8ClampedArray(w * h * 4);
@@ -98,6 +99,30 @@ describe("effect identity cases", () => {
       Array.from(applyEffect(src, 1, 1, "chromatic-aberration", { offset: 0.1 })),
       Array.from(src),
     );
+  });
+
+  it("fills transparent pixels from the nearest visible pixel in either direction", () => {
+    const right = new Uint8ClampedArray([
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 0, 0, 255,
+    ]);
+    const fromRight = nearestVisibleRGBA(right, 5, 1);
+    for (let x = 0; x < 4; x++) {
+      assert.deepEqual(Array.from(fromRight.slice(x * 4, x * 4 + 3)), [255, 0, 0]);
+    }
+
+    const left = new Uint8ClampedArray([
+      0, 255, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ]);
+    const fromLeft = nearestVisibleRGBA(left, 5, 1);
+    for (let x = 1; x < 5; x++) {
+      assert.deepEqual(Array.from(fromLeft.slice(x * 4, x * 4 + 3)), [0, 255, 0]);
+    }
+  });
+
+  it("keeps opaque pixels bright next to transparency", () => {
+    const src = new Uint8ClampedArray([0, 0, 0, 0, 255, 0, 0, 255, 0, 0, 0, 0]);
+    const out = applyEffect(src, 3, 1, "blur", { radius: 1 });
+    assert.deepEqual(Array.from(out.slice(4, 8)), [255, 0, 0, 255]);
   });
 
   it("keeps transparent RGB from changing visible blur results", () => {

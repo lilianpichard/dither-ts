@@ -385,8 +385,11 @@ export function applyEffect(
   const normalized = normalizeParams(type, params);
   const fn = effectFunction(type);
   if (isIdentityEffect(type, normalized)) return copyOf(src);
-  const safe = nearestVisibleRGBA(src, w, h);
-  const working = premultiplyRGBA(safe);
+  // Premultiply first: nearestVisibleRGBA then fills the transparent blocks
+  // with visible *premultiplied* colour. Filling before premultiplying would
+  // be undone for every fully transparent pixel, and blur/glow would spread
+  // black into the visible edge.
+  const working = nearestVisibleRGBA(premultiplyRGBA(src), w, h);
   const progress = onRow
     ? (
         done: number,
