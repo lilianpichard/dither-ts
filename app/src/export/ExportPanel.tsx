@@ -14,6 +14,7 @@ import {
   runExportAction,
 } from "./request";
 import { exportOutline, FORMATS, optionsFor, type ExportFormat } from "./formats";
+import { paintExportImage } from "./canvas";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
@@ -163,13 +164,13 @@ export default function ExportPanel() {
     canvas.height = image.height;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("this browser would not give the app a 2d context");
-    // Jpeg has no alpha, so a transparent pixel would come back black rather
-    // than the colour the dither put there.
-    if (outline.opaque) {
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, image.width, image.height);
-    }
-    ctx.putImageData(new ImageData(image.data, image.width, image.height), 0, 0);
+    paintExportImage(
+      ctx,
+      new ImageData(image.data, image.width, image.height),
+      image.width,
+      image.height,
+      Boolean(outline.opaque),
+    );
     const blob = await new Promise<Blob | null>((resolve) => {
       canvas.toBlob(resolve, outline.mime, outline.quality);
     });

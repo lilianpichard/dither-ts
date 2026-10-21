@@ -183,14 +183,17 @@ export default function BatchPanel() {
   const done = settledCount(items.map((it) => it.status));
   const live = announceProgress({ label: t("batch.label"), running, done, total: items.length });
   const eta = running && done < items.length ? formatEta(etaMs) : "";
-  useConsoleMeta("batch", running ? `${done}/${items.length}` : `${items.length} items`);
+  useConsoleMeta(
+    "batch",
+    running ? `${done}/${items.length}` : t("batch.items", { count: items.length }),
+  );
 
   return (
     <div className="flex h-full flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         {canOpen ? (
           <Button variant="secondary" disabled={running} onClick={() => void onAddImages()}>
-            Add images
+            {t("batch.addImages")}
           </Button>
         ) : (
           <Input

@@ -96,7 +96,13 @@ export default function ToolsPanel({
               <Timeline active={tool === "timeline"} />
             </Suspense>
           </TabsContent>
-          <TabsContent value="export" className="h-full">
+          <TabsContent
+            value="export"
+            // Same reasoning as batch: an export aborts on unmount, so the
+            // panel stays mounted and is only hidden while another tab shows.
+            forceMount
+            className="h-full data-[state=inactive]:hidden"
+          >
             <ExportPanel />
           </TabsContent>
         </ConsoleMetaContext.Provider>

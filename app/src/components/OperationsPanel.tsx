@@ -123,7 +123,7 @@ export default function OperationsPanel() {
           aria-pressed={operations.invert === true}
           onClick={() => setOperations({ invert: !operations.invert })}
         >
-          Invert
+          {t("ops.invert")}
         </Button>
         <Button
           size="sm"
@@ -158,7 +158,9 @@ export default function OperationsPanel() {
           <Crop className="size-3 shrink-0 text-muted-foreground" aria-hidden />
           <span className="text-label text-foreground">{t("ops.crop")}</span>
           <Badge variant={operations.crop ? "default" : "secondary"} className="ml-auto">
-            {operations.crop ? `${operations.crop.width}×${operations.crop.height}` : "off"}
+            {operations.crop
+              ? `${operations.crop.width}×${operations.crop.height}`
+              : t("rail.colorOff")}
           </Badge>
         </div>
         <div className="grid grid-cols-2 gap-1.5">

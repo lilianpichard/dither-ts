@@ -89,9 +89,16 @@ interface AppState {
    */
   showVideo: (videoPreview: VideoPreview | null) => void;
   setRendering: (rendering: boolean) => void;
+  /**
+   * Load generation shared by image and video decodes. A decode may only
+   * publish when its token is still current, so the last file picked wins even
+   * when an earlier decode finishes last.
+   */
+  mediaSeq: number;
+  beginMediaLoad: () => number;
   /** A file the shared picker routed to the video panel, waiting to load. */
-  pendingVideo: File | null;
-  loadVideo: (file: File | null) => void;
+  pendingVideo: { file: File; seq: number } | null;
+  loadVideo: (file: File | null, seq?: number) => void;
   /**
    * Bumped whenever the loaded media is dropped, so the timeline can throw the
    * clip away without the store having to reach into it. The canvas owner lives
@@ -99,8 +106,15 @@ interface AppState {
    */
   clearSeq: number;
   clearMedia: () => void;
-  /** Params are merged; a given `operations` set replaces the current one. */
-  setParams: (params: Partial<DitherParams>, operations?: Partial<ImageOperations>) => void;
+  /**
+   * Params are merged; a given `operations` set replaces the current one, and
+   * a given effect stack replaces the current one in the same history step.
+   */
+  setParams: (
+    params: Partial<DitherParams>,
+    operations?: Partial<ImageOperations>,
+    effects?: StackedEffect[],
+  ) => void;
   /** Patch the operation set, leaving untouched fields alone. */
   setOperations: (operations: Partial<ImageOperations>) => void;
   resetOperations: () => void;
@@ -128,14 +142,14 @@ export interface StackedEffect extends EffectInstance {
   key: string;
 }
 
-type HistorySlice = Pick<AppState, "params" | "operations" | "past" | "future">;
+type HistorySlice = Pick<AppState, "params" | "operations" | "effects" | "past" | "future">;
 
 function historyOf(state: HistorySlice): HistoryState {
   return { past: state.past, future: state.future };
 }
 
 function currentOf(state: HistorySlice): HistoryEntry {
-  return { params: state.params, operations: state.operations };
+  return { params: state.params, operations: state.operations, effects: state.effects };
 }
 
 // Only the crop depends on the frame: it must fit whatever source is current,
@@ -145,7 +159,20 @@ function fitToSource(source: ImageSource | null, operations: unknown): ImageOper
   return fitOperations(operations, source?.width ?? 0, source?.height ?? 0);
 }
 
-export const useApp = create<AppState>()((set) => ({
+/** Shared state transition for an effect edit, history entry included. */
+function effectChange(state: AppState, effects: StackedEffect[]): Partial<AppState> {
+  return {
+    effects,
+    result: null,
+    ...commitHistory(historyOf(state), currentOf(state), {
+      params: state.params,
+      operations: state.operations,
+      effects,
+    }),
+  };
+}
+
+export const useApp = create<AppState>()((set, get) => ({
   media: null,
   source: null,
   params: {
@@ -165,10 +192,17 @@ export const useApp = create<AppState>()((set) => ({
   past: EMPTY_HISTORY.past,
   future: EMPTY_HISTORY.future,
   pendingVideo: null,
+  mediaSeq: 0,
+  beginMediaLoad: () => {
+    const seq = get().mediaSeq + 1;
+    set({ mediaSeq: seq });
+    return seq;
+  },
   clearSeq: 0,
   clearMedia: () =>
     set((state) => ({
       media: null,
+      mediaSeq: state.mediaSeq + 1,
       source: null,
       // The canvas goes empty, whichever kind owned it. A clip stays loaded in
       // the timeline until it sees the counter below move, so the two agree
@@ -180,7 +214,8 @@ export const useApp = create<AppState>()((set) => ({
       previewScaled: false,
       clearSeq: state.clearSeq + 1,
     })),
-  loadVideo: (file) => set({ pendingVideo: file }),
+  loadVideo: (file, seq = get().mediaSeq) =>
+    set({ pendingVideo: file === null ? null : { file, seq } }),
   setSource: (source) =>
     set((state) => ({
       source,
@@ -196,7 +231,7 @@ export const useApp = create<AppState>()((set) => ({
       rendering: false,
       previewScaled: false,
     })),
-  setParams: (params, operations) =>
+  setParams: (params, operations, effects) =>
     set((state) => {
       // The variable-error diffusion family has no colour form, so colour and one
       // of those methods cannot be combined: the render would be rejected in the
@@ -210,13 +245,18 @@ export const useApp = create<AppState>()((set) => ({
       // preset without operations clears the previous ones.
       const nextOperations =
         operations === undefined ? state.operations : fitToSource(state.source, operations);
+      // A preset passes its effect stack here too, so params, operations and
+      // effects are one undo step instead of two.
+      const nextEffects = effects === undefined ? state.effects : effects;
       return {
         params: nextParams,
         operations: nextOperations,
+        effects: nextEffects,
         result: null,
         ...commitHistory(historyOf(state), currentOf(state), {
           params: nextParams,
           operations: nextOperations,
+          effects: nextEffects,
         }),
       };
     }),
@@ -229,6 +269,7 @@ export const useApp = create<AppState>()((set) => ({
         ...commitHistory(historyOf(state), currentOf(state), {
           params: state.params,
           operations: next,
+          effects: state.effects,
         }),
       };
     }),
@@ -239,6 +280,7 @@ export const useApp = create<AppState>()((set) => ({
       ...commitHistory(historyOf(state), currentOf(state), {
         params: state.params,
         operations: IDENTITY_OPERATIONS,
+        effects: state.effects,
       }),
     })),
   undo: () =>
@@ -249,6 +291,7 @@ export const useApp = create<AppState>()((set) => ({
         ...step.history,
         params: step.entry.params,
         operations: fitToSource(state.source, step.entry.operations),
+        effects: step.entry.effects,
         result: null,
       };
     }),
@@ -260,6 +303,7 @@ export const useApp = create<AppState>()((set) => ({
         ...step.history,
         params: step.entry.params,
         operations: fitToSource(state.source, step.entry.operations),
+        effects: step.entry.effects,
         result: null,
       };
     }),
@@ -277,40 +321,45 @@ export const useApp = create<AppState>()((set) => ({
   setRendering: (rendering) => set({ rendering }),
   setPreviewScaled: (previewScaled) => set({ previewScaled }),
   isVideo: (state) => state.media === "video",
-  setEffects: (effects) => set({ effects, result: null }),
+  setEffects: (effects) => set((state) => effectChange(state, effects)),
   addEffect: (type) =>
-    set((state) => ({
-      effects: [
+    set((state) =>
+      effectChange(state, [
         ...state.effects,
         { key: uid(), type, params: defaultEffectParams(type), enabled: true },
-      ],
-      result: null,
-    })),
+      ]),
+    ),
   removeEffect: (index) =>
-    set((state) => ({
-      effects: state.effects.filter((_, i) => i !== index),
-      result: null,
-    })),
+    set((state) =>
+      effectChange(
+        state,
+        state.effects.filter((_, i) => i !== index),
+      ),
+    ),
   moveEffect: (index, direction) =>
     set((state) => {
       const next = [...state.effects];
       const target = index + direction;
       if (target < 0 || target >= next.length) return state;
       [next[index], next[target]] = [next[target], next[index]];
-      return { effects: next, result: null };
+      return effectChange(state, next);
     }),
   toggleEffect: (index) =>
-    set((state) => ({
-      effects: state.effects.map((effect, i) =>
-        i === index ? { ...effect, enabled: !effect.enabled } : effect,
+    set((state) =>
+      effectChange(
+        state,
+        state.effects.map((effect, i) =>
+          i === index ? { ...effect, enabled: !effect.enabled } : effect,
+        ),
       ),
-      result: null,
-    })),
+    ),
   setEffectParam: (index, key, value) =>
-    set((state) => ({
-      effects: state.effects.map((effect, i) =>
-        i === index ? { ...effect, params: { ...effect.params, [key]: value } } : effect,
+    set((state) =>
+      effectChange(
+        state,
+        state.effects.map((effect, i) =>
+          i === index ? { ...effect, params: { ...effect.params, [key]: value } } : effect,
+        ),
       ),
-      result: null,
-    })),
+    ),
 }));

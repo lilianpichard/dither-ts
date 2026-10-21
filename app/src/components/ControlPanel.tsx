@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { cn } from "cn";
 import { METHOD_NAMES, PALETTES, supportsColor, type DitherMethod } from "../../../src/index.js";
+import { PIXEL_SIZE_MAX, PIXEL_SIZE_MIN } from "../image/limits";
 import { toast } from "sonner";
 import { resolveColorMode, useApp } from "../store";
 import { describeRenderStatus } from "../status";
@@ -25,8 +26,7 @@ import { Slider } from "@/components/ui/slider";
  * at about fifteen blocks per row; past it the kernel still runs but answers
  * with one block per row, which is not a control worth exposing.
  */
-export const PIXEL_SIZE_MIN = 1;
-export const PIXEL_SIZE_MAX = 128;
+export { PIXEL_SIZE_MAX, PIXEL_SIZE_MIN };
 
 /**
  * The three colour modes: greyscale, quantise to a palette, or keep the photo's
@@ -307,8 +307,12 @@ export default function ControlPanel({
       <Badge aria-hidden variant={rendering ? "secondary" : "default"} className="w-fit">
         {status}
       </Badge>
-      <p className="text-label text-muted-foreground">Method {methodIndex}/24</p>
-      <p className="text-label text-muted-foreground">Color {params.color ? "on" : "off"}</p>
+      <p className="text-label text-muted-foreground">
+        {t("rail.methodCount", { index: methodIndex, total: METHOD_NAMES.length })}
+      </p>
+      <p className="text-label text-muted-foreground">
+        {params.color ? t("rail.colorSummaryOn") : t("rail.colorSummaryOff")}
+      </p>
       <div className="mt-1 border-t border-border pt-3">
         <Label className="mb-2">{t("rail.adjust")}</Label>
         <OperationsPanel />

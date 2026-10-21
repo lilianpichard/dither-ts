@@ -3,6 +3,7 @@ import {
   DOCK_ZONES,
   allowedSides,
   dockLayout,
+  dockSideForKey,
   resolveDockZone,
   zoneBox,
   type Point,
@@ -96,6 +97,22 @@ describe("dockLayout", () => {
   it("keeps the console on its own side when the rail moves", () => {
     const moved = dockLayout(base, "rail", "right");
     expect(moved.consoleSide).toBe("bottom");
+  });
+});
+
+describe("dockSideForKey", () => {
+  it("maps each arrow to the edge it points at", () => {
+    expect(dockSideForKey("console", "ArrowUp")).toBe("top");
+    expect(dockSideForKey("console", "ArrowRight")).toBe("right");
+    expect(dockSideForKey("console", "ArrowDown")).toBe("bottom");
+    expect(dockSideForKey("console", "ArrowLeft")).toBe("left");
+  });
+
+  it("refuses a vertical edge for the rail", () => {
+    expect(dockSideForKey("rail", "ArrowLeft")).toBe("left");
+    expect(dockSideForKey("rail", "ArrowRight")).toBe("right");
+    expect(dockSideForKey("rail", "ArrowUp")).toBeNull();
+    expect(dockSideForKey("rail", "ArrowDown")).toBeNull();
   });
 });
 

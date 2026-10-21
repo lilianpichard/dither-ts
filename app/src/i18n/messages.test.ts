@@ -14,7 +14,9 @@ import { LOCALE_NAMES, LOCALES, MESSAGES } from "./messages";
 // format check below, so the test fails loudly instead of silently.
 const KNOWN: Record<string, string | number> = {
   count: 3,
+  index: 2,
   name: "a",
+  hex: "#aabbcc",
   version: "9.9.9",
   percent: 42,
   value: 4,

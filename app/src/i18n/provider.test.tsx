@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { I18nProvider, useLocale, useTranslate } from "./index";
+import { I18nProvider, applyDocumentLocale, useLocale, useTranslate } from "./index";
 import { MESSAGES } from "./messages";
 
 /** A window whose storage holds a fixed choice, as a returning user's does. */
@@ -37,6 +37,16 @@ function render(window: unknown): string {
     </I18nProvider>,
   );
 }
+
+describe("document language", () => {
+  it("follows the selected locale, so assistive tech reads the right language", () => {
+    const root = { lang: "" };
+    applyDocumentLocale({ documentElement: root } as unknown as Document, "fr");
+    expect(root.lang).toBe("fr");
+    applyDocumentLocale({ documentElement: root } as unknown as Document, "en");
+    expect(root.lang).toBe("en");
+  });
+});
 
 describe("I18nProvider", () => {
   it("paints the language a returning user chose, with no flash", () => {

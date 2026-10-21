@@ -93,16 +93,46 @@ export async function exportGif(
   throwIfAborted(signal);
   const monochrome = options.monochrome ?? options.color === false;
   const fallback = resolveExportPalette(paletteRef, monochrome);
-  // The palette is fixed for the whole file, so it is settled from the first
-  // frame: either that frame's own colours, or the configured palette.
+  // Colours accumulate across frames. A palette locked to the first frame
+  // banded every scene that introduced a colour the first frame did not use.
+  const known = new Map<number, [number, number, number]>();
   let palette = fallback;
   let gifPalette: Array<[number, number, number]> = fallback.map((color) => [
     color[0],
     color[1],
     color[2],
   ]);
+  const remember = (colours: Array<[number, number, number]>): void => {
+    for (const colour of colours) {
+      known.set((colour[0] << 16) | (colour[1] << 8) | colour[2], colour);
+    }
+  };
+  const refreshPalette = (): void => {
+    let colours = [...known.values()];
+    if (colours.length <= 1) return;
+    if (colours.length > GIF_PALETTE_LIMIT) {
+      const sample = new Uint8ClampedArray(colours.length * 4);
+      colours.forEach(([r, g, b], index) => {
+        sample[index * 4] = r;
+        sample[index * 4 + 1] = g;
+        sample[index * 4 + 2] = b;
+        sample[index * 4 + 3] = 255;
+      });
+      colours = quantize(sample, GIF_PALETTE_LIMIT) as Array<[number, number, number]>;
+      known.clear();
+      remember(colours);
+    }
+    palette = colours;
+    gifPalette = colours;
+  };
   const gif = GIFEncoder();
-  const delay = Math.round(1000 / Math.min(30, Math.max(1, Math.round(fps))));
+  const safeFps = Math.min(30, Math.max(1, Math.round(fps)));
+  // GIF stores delay in centiseconds. Rounding each frame's delay independently
+  // makes 30 fps play at 33 fps; cumulative rounding keeps the rate exact.
+  const delayFor = (index: number): number => {
+    const centiseconds = (frame: number): number => Math.round((frame * 100) / safeFps);
+    return (centiseconds(index + 1) - centiseconds(index)) * 10;
+  };
   const total = totalFrames(options.total ?? (Array.isArray(frames) ? frames.length : undefined));
   const maxBytes = validateExportByteCap(options.maxBytes);
   let count = 0;
@@ -125,28 +155,22 @@ export async function exportGif(
       if (width === undefined) {
         width = frame.width;
         height = frame.height;
-        if (!monochrome) {
-          // Exact first: a posterised or palette-locked frame already fits. A
-          // table of one colour is refused by the encoder, so a single-colour
-          // frame falls through rather than producing a broken gif.
-          const exact = exactFramePalette(frame.data);
-          if (exact !== null && exact.length > 1) {
-            palette = exact.map(([r, g, b]) => [r, g, b]);
-            gifPalette = exact;
-          } else {
-            // Too many colours for a table, so build one from the frame. The
-            // old fallback was the configured palette, which is two colours
-            // wide when a preset names one the kernel does not have, and that
-            // is what turned a colour preview into a black and white gif.
-            const fitted = quantize(frame.data, GIF_PALETTE_LIMIT);
-            if (fitted.length > 1) {
-              palette = fitted.map(([r, g, b]) => [r, g, b]);
-              gifPalette = fitted;
-            }
-          }
-        }
       } else if (frame.width !== width || frame.height !== height) {
         throw new Error("all export frames must have the same dimensions");
+      }
+      if (!monochrome) {
+        // Exact first: a posterised or palette-locked frame already fits. Too
+        // many colours for a table falls back to a quantised table for that
+        // frame, and either way the colours join the global palette.
+        const exact = exactFramePalette(frame.data);
+        const frameColours =
+          exact !== null
+            ? exact
+            : (quantize(frame.data, GIF_PALETTE_LIMIT) as Array<[number, number, number]>);
+        if (frameColours.length > 1) {
+          remember(frameColours);
+          refreshPalette();
+        }
       }
       const indexStream = new Uint8Array(frame.width * frame.height);
       for (let i = 0; i < indexStream.length; i++) {
@@ -157,7 +181,10 @@ export async function exportGif(
           palette,
         );
       }
-      gif.writeFrame(indexStream, frame.width, frame.height, { palette: gifPalette, delay });
+      gif.writeFrame(indexStream, frame.width, frame.height, {
+        palette: gifPalette,
+        delay: delayFor(count),
+      });
       if (gifByteLength(gif) > maxBytes) throw exportByteCapError(maxBytes);
       count++;
       onProgress?.(count, total);

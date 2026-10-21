@@ -13,7 +13,7 @@ import ToolsPanel, { TOOL_IDS, type ToolId } from "./components/ToolsPanel";
 import { TopBar } from "./components/TopBar";
 import { AnalyzingImage } from "./components/AnalyzingImage";
 import { PanelResizer } from "./components/PanelResizer";
-import { usePanelSize } from "./lib/panelSize";
+import { panelMaxExtent, usePanelSize } from "./lib/panelSize";
 import { SLOW_OPERATION_MS, warnIfSlow } from "./lib/slowOperation";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { MEDIA_ACCEPT, mediaKindOf, type MediaKind } from "./media/kind";
@@ -23,7 +23,7 @@ import { useLayout } from "./layout";
 import { useDockDrag, type DockPanel } from "./useDockDrag";
 import { DockTargets } from "./components/DockTargets";
 import { PanelGrip } from "./components/PanelGrip";
-import { dockLayout, type DockSide } from "./dock";
+import { dockLayout, dockSideForKey, type DockSide } from "./dock";
 import { useGlobalErrors } from "./ErrorReporting";
 import { mediaRejection, routeMedia } from "./media/route";
 import { useMediaDrop } from "./media/useMediaDrop";
@@ -92,8 +92,8 @@ export default function App() {
   const setRendering = useApp((state) => state.setRendering);
   const setPreviewScaled = useApp((state) => state.setPreviewScaled);
   const loadVideo = useApp((state) => state.loadVideo);
+  const beginMediaLoad = useApp((state) => state.beginMediaLoad);
   const [tool, setTool] = useState<ToolId>("presets");
-  const fileSequence = useRef(0);
   const renderAbort = useRef<AbortController | null>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
   // Panel extents are user-owned: draggable, collapsible, remembered.
@@ -133,17 +133,20 @@ export default function App() {
    * that decides which kind a file is and who takes the canvas.
    */
   async function onFile(file: File, kind: MediaKind) {
+    if (!file) return;
+    const sequence = beginMediaLoad();
     if (kind === "video") {
-      routeMedia(file, kind, { setSource, loadVideo });
+      routeMedia(file, kind, {
+        setSource,
+        loadVideo: (video) => loadVideo(video, sequence),
+      });
       return;
     }
-    if (!file) return;
-    const sequence = ++fileSequence.current;
     try {
       const next = await fileToSource(file);
-      if (sequence === fileSequence.current) setSource(next);
+      if (sequence === useApp.getState().mediaSeq) setSource(next);
     } catch (error) {
-      if (sequence === fileSequence.current) {
+      if (sequence === useApp.getState().mediaSeq) {
         toast.error(
           t("error.loadImage", {
             reason: error instanceof Error ? error.message : String(error),
@@ -311,10 +314,28 @@ export default function App() {
   const railSide = useLayout((state) => state.railSide);
   const consoleSide = useLayout((state) => state.consoleSide);
   // A panel can be dragged until the other one is at its own minimum, which is
-  // the whole window minus what the neighbour needs. The constant is the space
-  // the shell already reserves for the canvas, so the two agree by construction.
-  const railMaxBounds = Math.max(RAIL_MIN, bounds.w - CANVAS_MIN_W);
-  const consoleMaxBounds = Math.max(CONSOLE_MIN, bounds.h - CANVAS_MIN_H);
+  // the whole window minus what the neighbour needs. The axis follows the dock:
+  // a console on a side claims width, not height.
+  const consoleRow = consoleSide === "left" || consoleSide === "right";
+  const railMaxBounds = Math.max(
+    RAIL_MIN,
+    panelMaxExtent(bounds, railSide, consoleRow ? consolePanel.size : 0, CANVAS_MIN_W),
+  );
+  const consoleMaxBounds = Math.max(
+    CONSOLE_MIN,
+    panelMaxExtent(
+      bounds,
+      consoleSide,
+      consoleRow ? rail.size : 0,
+      consoleRow ? CANVAS_MIN_W : CANVAS_MIN_H,
+    ),
+  );
+  useEffect(() => {
+    if (rail.size > railMaxBounds) rail.setSize(railMaxBounds);
+  }, [rail.size, rail.setSize, railMaxBounds]);
+  useEffect(() => {
+    if (consolePanel.size > consoleMaxBounds) consolePanel.setSize(consoleMaxBounds);
+  }, [consolePanel.size, consolePanel.setSize, consoleMaxBounds]);
   // Committing a dock. The rule that decides which edges a panel may take
   // lives with the zones, so the highlight and the drop can never disagree
   // about it, and a refused drop leaves the store untouched.
@@ -349,25 +370,14 @@ export default function App() {
   const onGripKeyDown = useCallback(
     (panel: DockPanel) => (event: React.KeyboardEvent) => {
       // Arrow keys dock without dragging, so the layout is reachable by
-      // keyboard and does not require a pointer to hold and aim.
-      const sides =
-        panel === "rail"
-          ? (["left", "right"] as const)
-          : (["top", "right", "bottom", "left"] as const);
-      const current =
-        panel === "rail" ? useLayout.getState().railSide : useLayout.getState().consoleSide;
-      const index = (sides as readonly string[]).indexOf(current);
-      const delta =
-        event.key === "ArrowRight" || event.key === "ArrowDown"
-          ? 1
-          : event.key === "ArrowLeft" || event.key === "ArrowUp"
-            ? -1
-            : 0;
-      if (delta === 0) return;
+      // keyboard and does not require a pointer to hold and aim. Each arrow
+      // selects the edge it points at rather than cycling an arbitrary order.
+      const side = dockSideForKey(panel, event.key);
+      if (side === null) return;
       event.preventDefault();
-      commitDock(panel, sides[(index + delta + sides.length) % sides.length]);
+      commitDock(panel, side);
     },
-    [],
+    [commitDock],
   );
   const railGrip = (
     <PanelGrip
@@ -383,18 +393,8 @@ export default function App() {
 
   // Where the console hangs, which decides the direction of the flex row it
   // shares with the canvas and whether its extent is a width or a height. The
-  // boundary bar sits on the far side of the console from the canvas, so it is
-  // drawn the same whichever edge the console moved to.
-  const consoleRow = consoleSide === "left" || consoleSide === "right";
+  // boundary bar sits between the console and the canvas on every edge.
   const consoleBefore = consoleSide === "top" || consoleSide === "left";
-  const consoleBarSide =
-    consoleSide === "right"
-      ? "left"
-      : consoleSide === "left"
-        ? "right"
-        : consoleSide === "top"
-          ? "bottom"
-          : "top";
 
   const consoleGrip = (
     <PanelGrip
@@ -408,17 +408,20 @@ export default function App() {
     />
   );
 
+  const consoleResizer = (
+    <PanelResizer
+      side={consoleSide}
+      label="console"
+      size={consolePanel.size}
+      onResize={consolePanel.resize}
+      onToggle={consolePanel.toggle}
+      min={CONSOLE_MIN}
+      max={consoleMaxBounds}
+    />
+  );
   const consoleDock = (
     <>
-      <PanelResizer
-        side={consoleBarSide}
-        label="console"
-        size={consolePanel.size}
-        onResize={consolePanel.resize}
-        onToggle={consolePanel.toggle}
-        min={CONSOLE_MIN}
-        max={consoleMaxBounds}
-      />
+      {!consoleBefore && consoleResizer}
       <ToolsPanel
         tool={tool}
         onTool={setTool}
@@ -426,6 +429,7 @@ export default function App() {
         height={consoleRow ? "100%" : consolePanel.size}
         grip={consoleGrip}
       />
+      {consoleBefore && consoleResizer}
     </>
   );
 
@@ -508,7 +512,7 @@ export default function App() {
                       <div className="max-w-sm text-center">
                         <p className="text-label text-destructive">{message}</p>
                         <button type="button" onClick={retry} className="mt-2 text-label underline">
-                          Try again
+                          {t("common.retry")}
                         </button>
                       </div>
                     </div>

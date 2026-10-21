@@ -142,11 +142,13 @@ export function TimelineRibbon({
   duration,
   time,
   onScrub,
+  disabled = false,
 }: {
   range: { start: number; end: number };
   duration: number;
   time: number;
   onScrub: (time: number) => void;
+  disabled?: boolean;
 }) {
   const t = useTranslate();
   const span = spanPercent(range, duration);
@@ -177,6 +179,7 @@ export function TimelineRibbon({
         max={duration}
         step={0.05}
         value={[time]}
+        disabled={disabled}
         onValueChange={([v]) => onScrub(v)}
       />
     </Card>
@@ -187,11 +190,12 @@ export default function Timeline({ active = true }: { active?: boolean }) {
   const params = useApp((s) => s.params);
   const effects = useApp((s) => s.effects);
   const operations = useApp((s) => s.operations);
-  const setVideoPreview = useApp((s) => s.setVideoPreview);
+  const showVideo = useApp((s) => s.showVideo);
   const media = useApp((s) => s.media);
   const clearSeq = useApp((s) => s.clearSeq);
   const pendingVideo = useApp((s) => s.pendingVideo);
   const loadVideo = useApp((s) => s.loadVideo);
+  const beginMediaLoad = useApp((s) => s.beginMediaLoad);
   const [clip, setClip] = useState<LoadedClip | null>(null);
   const duration = clip?.info.duration ?? 0;
   const [fileName, setFileName] = useState("");
@@ -258,7 +262,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
     exportPool.current?.invalidate();
   }
 
-  async function onFile(file: File | undefined) {
+  async function onFile(file: File | undefined, token = beginMediaLoad()) {
     if (!file) return;
     cancelExport();
     previewAbort.current?.abort();
@@ -277,7 +281,11 @@ export default function Timeline({ active = true }: { active?: boolean }) {
         signal: controller.signal,
         timeout: LOAD_TIMEOUT_MS,
       });
-      if (sequence !== loadSeq.current || controller.signal.aborted) {
+      if (
+        sequence !== loadSeq.current ||
+        controller.signal.aborted ||
+        token !== useApp.getState().mediaSeq
+      ) {
         loaded.revoke();
         return;
       }
@@ -289,7 +297,13 @@ export default function Timeline({ active = true }: { active?: boolean }) {
       setTime(0);
       setRange({ start: 0, end: loaded.info.duration });
     } catch (error) {
-      if (sequence === loadSeq.current && !controller.signal.aborted) setError(String(error));
+      if (
+        sequence === loadSeq.current &&
+        !controller.signal.aborted &&
+        token === useApp.getState().mediaSeq
+      ) {
+        setError(String(error));
+      }
     } finally {
       if (loadAbort.current === controller) loadAbort.current = null;
     }
@@ -342,6 +356,10 @@ export default function Timeline({ active = true }: { active?: boolean }) {
     // painting here. `geometry` is the preview size after the operations, constant
     // for a clip until they change: that keeps the surface's zoom still while
     // frames stream in, and makes 100% mean one preview pixel per screen pixel.
+    // An image took the canvas while this frame was rendering: the clip is
+    // still loaded, but the image owns the subject until the clip is chosen
+    // again. Publishing here would silently steal it back.
+    if (useApp.getState().media === "image") return;
     const published: VideoPreview = {
       display: { width: res.width, height: res.height, pixels: res.pixels },
       compare: geometry,
@@ -349,7 +367,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
       clipKey: clipKeyOf(clip),
     };
     lastPreviewRef.current = published;
-    setVideoPreview(published);
+    showVideo(published);
 
     // The frame is current again, so any earlier preview error is stale.
     if (!working) setError("");
@@ -429,21 +447,24 @@ export default function Timeline({ active = true }: { active?: boolean }) {
   // clip and the published frame all stay where they are.
   useEffect(() => {
     if (active) {
-      // Reopening the tab takes the canvas back. Loading an image has meanwhile
-      // claimed it, and this is how the video gets it again without a re-render.
-      if (lastPreviewRef.current) setVideoPreview(lastPreviewRef.current);
+      // Only republish when the clip still owns the canvas. An image loaded
+      // while the tab was hidden clears that ownership, and this effect must
+      // not hand the canvas back merely because the tab was reopened.
+      if (lastPreviewRef.current && useApp.getState().media === "video") {
+        showVideo(lastPreviewRef.current);
+      }
       return;
     }
     clipRef.current?.element.pause();
     setPlaying(false);
     resetLivePreview();
-  }, [active]);
+  }, [active, showVideo]);
 
   // Real teardown only, now that the tab hides rather than unmounts. Hand the
   // canvas back so a frame is never left with no timeline behind it.
   useEffect(() => {
-    return () => setVideoPreview(null);
-  }, [setVideoPreview]);
+    return () => showVideo(null);
+  }, [showVideo]);
 
   // A file picked outside this panel. The rail and the empty state both take an
   // image or a video, so a video arrives here through the store rather than
@@ -452,7 +473,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
   useEffect(() => {
     if (!pendingVideo) return;
     loadVideo(null);
-    void onFile(pendingVideo);
+    void onFile(pendingVideo.file, pendingVideo.seq);
   }, [pendingVideo, loadVideo, onFile]);
 
   // The canvas was emptied, so the clip goes with it. The counter is what the
@@ -467,6 +488,7 @@ export default function Timeline({ active = true }: { active?: boolean }) {
     clipRef.current?.element.pause();
     clipRef.current?.revoke();
     clipRef.current = null;
+    lastPreviewRef.current = null;
     loadAbort.current?.abort();
     setClip(null);
     setFileName("");
@@ -797,7 +819,13 @@ export default function Timeline({ active = true }: { active?: boolean }) {
 
           <ScrollArea className="min-h-0 flex-1">
             <div className="flex flex-col gap-3 pr-2.5">
-              <TimelineRibbon range={range} duration={duration} time={time} onScrub={onScrub} />
+              <TimelineRibbon
+                range={range}
+                duration={duration}
+                time={time}
+                onScrub={onScrub}
+                disabled={working}
+              />
 
               <div className="grid grid-rows-1 gap-3 @lg:grid-cols-2">
                 {/* Centred along the card's own height, so the transport sits
@@ -959,6 +987,15 @@ export default function Timeline({ active = true }: { active?: boolean }) {
         </Empty>
       )}
 
+      {/* A load or preview failure has to be visible even when no clip could
+          be decoded; the export footer only exists once a clip is loaded. */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertTitle>{t("timeline.error")}</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
       {clip && (
         <>
           <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
@@ -1001,12 +1038,6 @@ export default function Timeline({ active = true }: { active?: boolean }) {
               <Badge aria-hidden variant="secondary">
                 {phase}
               </Badge>
-            )}
-            {error && (
-              <Alert variant="destructive">
-                <AlertTitle>{t("timeline.exportFailed")}</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
             )}
           </div>
         </>

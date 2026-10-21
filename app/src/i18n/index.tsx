@@ -68,6 +68,11 @@ const LocaleContext = createContext<I18nValue>({
   setLocale: () => {},
 });
 
+/** Keep the document language in step with the chosen locale. */
+export function applyDocumentLocale(doc: Pick<Document, "documentElement">, locale: Locale): void {
+  doc.documentElement.lang = locale;
+}
+
 export function I18nProvider({ children }: { children: ReactNode }) {
   // Read during the first render, not in an effect: a language chosen earlier
   // has to be on screen from the first paint, or the app flickers.
@@ -79,6 +84,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     } catch {
       // The choice lasts for this session only, which beats throwing.
     }
+    if (typeof document !== "undefined") applyDocumentLocale(document, locale);
   }, [locale]);
 
   const value = useMemo<I18nValue>(() => ({ locale, setLocale }), [locale]);

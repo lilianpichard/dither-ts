@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { IntlProvider } from "react-intl";
-import { PanelResizer, type PanelSide } from "./PanelResizer";
+import { PanelResizer, dragExtent, type PanelSide } from "./PanelResizer";
 import { MESSAGES } from "../i18n/messages";
 
 /**
@@ -29,6 +29,24 @@ function markup(side: PanelSide, size: number): string {
 function handleIcons(side: PanelSide, size: number): string[] {
   return [...markup(side, size).matchAll(/lucide-([a-z-]+)/g)].map((match) => match[1]);
 }
+
+describe("drag direction", () => {
+  it("grows whichever side the panel is docked to", () => {
+    // The bar sits between the panel and the canvas. Moving toward the panel
+    // grows it; the old sign made a left rail shrink when dragged right.
+    expect(dragExtent("left", 300, 40)).toBe(340);
+    expect(dragExtent("right", 300, -40)).toBe(340);
+    expect(dragExtent("top", 300, 40)).toBe(340);
+    expect(dragExtent("bottom", 300, -40)).toBe(340);
+  });
+
+  it("shrinks on the opposite move", () => {
+    expect(dragExtent("left", 300, -40)).toBe(260);
+    expect(dragExtent("right", 300, 40)).toBe(260);
+    expect(dragExtent("top", 300, -40)).toBe(260);
+    expect(dragExtent("bottom", 300, 40)).toBe(260);
+  });
+});
 
 describe("PanelResizer axis", () => {
   it("maps a rail to the horizontal axis and a console to the vertical", () => {

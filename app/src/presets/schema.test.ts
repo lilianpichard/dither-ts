@@ -19,6 +19,14 @@ const VALID = JSON.stringify({
 });
 
 describe("preset schema", () => {
+  it("keeps a pixel size the rail can produce", () => {
+    const body = JSON.parse(VALID) as { params: { pixelSize: number } };
+    body.params.pixelSize = 32;
+    const { preset, warnings } = parsePresetJson(JSON.stringify(body));
+    expect(warnings).toEqual([]);
+    expect(preset!.params.pixelSize).toBe(32);
+  });
+
   it("round-trips a valid preset without warnings", () => {
     const { preset, warnings } = parsePresetJson(VALID);
     expect(warnings).toEqual([]);
@@ -45,7 +53,7 @@ describe("preset schema", () => {
     const { preset, warnings } = parsePresetJson(
       JSON.stringify({
         name: "X",
-        params: { method: "Nope", threshold: 999, palette: "Nope", color: "yes", pixelSize: 99 },
+        params: { method: "Nope", threshold: 999, palette: "Nope", color: "yes", pixelSize: 999 },
         effects: [
           { nope: true },
           { type: "", params: null },

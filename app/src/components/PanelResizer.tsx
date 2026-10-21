@@ -15,14 +15,18 @@ function axisOf(side: PanelSide): "horizontal" | "vertical" {
 }
 
 /**
- * The sign that turns a pointer delta into a change in extent. A panel on the
- * right or the bottom grows as the pointer moves down or right, so the delta
- * applies as is. A panel on the left or the top grows the other way, so it is
- * negated: without this, dragging a rail on the left would shrink it while the
- * pointer moved right.
+ * The sign that turns a pointer delta into a change in extent. The bar sits
+ * between the panel and the canvas, so a left or top panel grows as the bar
+ * moves toward the canvas (right or down) and a right or bottom panel grows as
+ * it moves the other way.
  */
 function signOf(side: PanelSide): 1 | -1 {
-  return side === "left" || side === "top" ? -1 : 1;
+  return side === "right" || side === "bottom" ? -1 : 1;
+}
+
+/** New extent after dragging a boundary by `delta` pointer pixels. */
+export function dragExtent(side: PanelSide, current: number, delta: number): number {
+  return current + delta * signOf(side);
 }
 
 /**
@@ -57,7 +61,6 @@ export function PanelResizer({
   // drag stalls and the clamp is never reached.
   const live = useRef(size);
   live.current = size;
-  const sign = signOf(side);
   const axis = axisOf(side);
 
   const clamp = (n: number) => Math.min(Math.max(n, min), Math.max(min, max));
@@ -125,9 +128,9 @@ export function PanelResizer({
       onPointerMove={(e) => {
         if (last.current === null || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
         const now = axis === "horizontal" ? e.clientX : e.clientY;
-        const delta = (now - last.current) * sign;
+        const delta = now - last.current;
         last.current = now;
-        apply(live.current + delta);
+        apply(dragExtent(side, live.current, delta));
       }}
       onPointerUp={(e) => {
         e.currentTarget.releasePointerCapture(e.pointerId);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
-import { createChunkReorderer } from "./exportMp4";
+import { createChunkWriter } from "./exportMp4";
 
 const FRAME = 83_333; // one frame at 12 fps, in the muxer's microseconds
 
@@ -34,24 +34,25 @@ describe("muxer ordering", () => {
     });
     // The raw entry point, because node has no EncodedVideoChunk to construct.
     // It reaches the same timestamp check that addVideoChunk does.
-    const reorder = createChunkReorderer(
-      (chunk) =>
+    const writer = createChunkWriter(
+      (chunk, _meta, compositionOffset) =>
         muxer.addVideoChunkRaw(
           body(),
           chunk.type === "key" ? "key" : "delta",
           chunk.timestamp,
           FRAME,
+          undefined,
+          compositionOffset,
         ),
       FRAME,
     );
     const asChunk = (timestamp: number, type = "delta") =>
       ({ timestamp, type, byteLength: 0, copyTo: (into: Uint8Array) => into }) as never;
-    // Decode order 0, 2, 1: the encoder's, not the timeline's.
-    reorder.push(asChunk(0, "key"));
-    reorder.push(asChunk(2 * FRAME));
-    reorder.push(asChunk(FRAME));
-    // Reaching this without a throw is the point: the muxer's own check is what
-    // rejected the same sequence when it arrived in decode order.
-    expect(() => reorder.settle()).not.toThrow();
+    // Decode order 0, 2, 1: the encoder's, not the timeline's. The writer keeps
+    // that order and describes the presentation order with an offset.
+    writer.push(asChunk(0, "key"));
+    writer.push(asChunk(2 * FRAME));
+    writer.push(asChunk(FRAME));
+    expect(() => writer.settle()).not.toThrow();
   });
 });

@@ -251,6 +251,30 @@ describe("store history", () => {
     expect(state().operations).toEqual({ invert: true, hue: 45, rotate: 90 });
   });
 
+  it("undoes a colour-mode-only change", () => {
+    state().setParams({ color: true });
+    state().setParams({ colorMode: "original" });
+    expect(state().params.colorMode).toBe("original");
+    state().undo();
+    expect(state().params.colorMode).toBeUndefined();
+    expect(state().params.color).toBe(true);
+  });
+
+  it("undoes and redoes the effect stack", () => {
+    state().addEffect("blur");
+    const added = state().effects[0];
+    state().setEffectParam(0, "radius", 8);
+    expect(state().effects[0].params.radius).toBe(8);
+
+    state().undo();
+    expect(state().effects).toEqual([added]);
+    state().undo();
+    expect(state().effects).toEqual([]);
+    state().redo();
+    expect(state().effects).toHaveLength(1);
+    expect(state().effects[0].type).toBe("blur");
+  });
+
   it("coalesces a slider drag into one undo step", () => {
     state().setParams({ threshold: 100 });
     state().setParams({ threshold: 120 });
@@ -360,12 +384,22 @@ describe("one source at a time", () => {
 });
 
 describe("a video arriving from the shared picker", () => {
-  it("hands the file to the timeline and clears itself", () => {
+  it("hands the file and its load token to the timeline", () => {
     const file = new File(["x"], "clip.mp4", { type: "video/mp4" });
-    state().loadVideo(file);
-    expect(state().pendingVideo).toBe(file);
+    const seq = state().beginMediaLoad();
+    state().loadVideo(file, seq);
+    expect(state().pendingVideo).toEqual({ file, seq });
     state().loadVideo(null);
     expect(state().pendingVideo).toBeNull();
+  });
+
+  it("invalidates an older decode when a newer load starts", () => {
+    const first = state().beginMediaLoad();
+    const second = state().beginMediaLoad();
+    expect(second).toBeGreaterThan(first);
+    expect(state().mediaSeq).toBe(second);
+    state().clearMedia();
+    expect(state().mediaSeq).toBeGreaterThan(second);
   });
 });
 

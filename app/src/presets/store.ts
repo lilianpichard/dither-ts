@@ -109,9 +109,10 @@ export function paramsToPreset(
 
 /** Apply a preset: params, a replaced operation set, and a freshly-keyed stack. */
 export function applyPreset(preset: Preset): void {
-  const { setParams, setEffects } = useApp.getState();
-  setParams(presetToParams(preset), preset.operations ?? {});
-  setEffects(
+  const { setParams } = useApp.getState();
+  setParams(
+    presetToParams(preset),
+    preset.operations ?? {},
     preset.effects.map((e) => ({
       key: uid(),
       type: e.type,

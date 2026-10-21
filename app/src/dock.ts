@@ -54,6 +54,21 @@ export function allowedSides(panel: "rail" | "console"): readonly DockSide[] {
   return panel === "rail" ? ["left", "right"] : ["top", "right", "bottom", "left"];
 }
 
+/** The side an arrow key points at, or null when the panel cannot go there. */
+export function dockSideForKey(panel: "rail" | "console", key: string): DockSide | null {
+  const side =
+    key === "ArrowUp"
+      ? "top"
+      : key === "ArrowRight"
+        ? "right"
+        : key === "ArrowDown"
+          ? "bottom"
+          : key === "ArrowLeft"
+            ? "left"
+            : null;
+  return side !== null && allowedSides(panel).includes(side) ? side : null;
+}
+
 /**
  * Drop a panel on a side, or leave it where it is when that side is not one it
  * may take. Returning the same layout on a refused drop means the caller can

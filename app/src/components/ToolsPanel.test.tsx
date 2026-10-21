@@ -23,6 +23,7 @@ function render(tool: "presets" | "batch"): string {
 // what the barrel of labelled controls now points at.
 const BATCH_INPUT = `aria-label="${MESSAGES.en["batch.pick"]}"`;
 const PRESET_NAME = MESSAGES.en["presets.name"];
+const EXPORT_EMPTY = MESSAGES.en["export.empty"];
 
 describe("ToolsPanel tab mounting", () => {
   it("keeps the batch panel mounted while another tab is showing", () => {
@@ -42,8 +43,14 @@ describe("ToolsPanel tab mounting", () => {
     expect(before).toContain("data-[state=inactive]:hidden");
   });
 
-  it("leaves the other panels free to unmount", () => {
-    // Only batch is force-mounted, so the preset panel still goes away.
+  it("keeps an export in flight mounted while another tab is showing", () => {
+    // ExportPanel aborts its render on unmount, so a tab switch used to throw
+    // the work away without a message.
+    expect(render("presets")).toContain(EXPORT_EMPTY);
+  });
+
+  it("leaves the panels with no background work free to unmount", () => {
+    // Presets are stateless, so the panel goes away with its tab.
     expect(render("batch")).not.toContain(PRESET_NAME);
   });
 });

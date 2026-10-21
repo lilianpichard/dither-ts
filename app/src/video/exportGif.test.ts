@@ -38,6 +38,61 @@ function frame(): { data: Uint8ClampedArray; width: number; height: number } {
   return { data: new Uint8ClampedArray([0, 0, 0, 255]), width: 1, height: 1 };
 }
 
+function colourFrame(colours: Array<[number, number, number]>): {
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
+} {
+  const data = new Uint8ClampedArray(colours.length * 4);
+  colours.forEach(([r, g, b], i) => {
+    data[i * 4] = r;
+    data[i * 4 + 1] = g;
+    data[i * 4 + 2] = b;
+    data[i * 4 + 3] = 255;
+  });
+  return { data, width: colours.length, height: 1 };
+}
+
+describe("GIF timing", () => {
+  it("keeps the requested frame rate instead of rounding every delay the same way", async () => {
+    const source = (async function* () {
+      yield frame();
+      yield frame();
+      yield frame();
+    })();
+    await exportGif(source, 30, "B&W", undefined, { total: 3, monochrome: true });
+    const calls = gifState.instances.at(-1)!.writeFrame.mock.calls;
+    // 30 fps is 3.33 centiseconds: alternating 3/4 cs keeps the average exact.
+    expect(calls.map((call) => call[3].delay)).toEqual([30, 40, 30]);
+  });
+});
+
+describe("GIF global palette", () => {
+  it("adds colours introduced by later frames", async () => {
+    const source = [
+      colourFrame([
+        [255, 0, 0],
+        [0, 0, 255],
+      ]),
+      colourFrame([
+        [0, 255, 0],
+        [255, 255, 0],
+      ]),
+    ];
+    await exportGif(source, 10, "B&W", undefined, { total: 2, monochrome: false });
+    const calls = gifState.instances.at(-1)!.writeFrame.mock.calls;
+    const secondPalette = calls[1][3].palette;
+    expect(secondPalette).toEqual(
+      expect.arrayContaining([
+        [255, 0, 0],
+        [0, 0, 255],
+        [0, 255, 0],
+        [255, 255, 0],
+      ]),
+    );
+  });
+});
+
 describe("GIF async frame consumption", () => {
   it("passes a black-and-white palette for monochrome output", async () => {
     const source = (async function* () {

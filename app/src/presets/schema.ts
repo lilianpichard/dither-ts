@@ -7,6 +7,7 @@ import { EFFECT_DEFS, METHOD_NAMES } from "../../../src/index.js";
 import type { ColorMode, DitherMethod, EffectDef } from "../../../src/index.js";
 import { PALETTES, type RGB } from "../../../src/index.js";
 import { isIdentity, sanitizeOperations } from "../image/settings";
+import { PIXEL_SIZE_MAX, PIXEL_SIZE_MIN } from "../image/limits";
 import type { ImageOperations } from "../image/ops";
 import { isLegacyPreset, migrateLegacyPreset } from "./legacy";
 import { PRESET_VERSION } from "./version";
@@ -185,8 +186,8 @@ function parseParams(v: unknown, warnings: string[]): PresetParams {
   let pixelSize = DEFAULTS.pixelSize;
   if (
     Number.isInteger(o.pixelSize) &&
-    (o.pixelSize as number) >= 1 &&
-    (o.pixelSize as number) <= 8
+    (o.pixelSize as number) >= PIXEL_SIZE_MIN &&
+    (o.pixelSize as number) <= PIXEL_SIZE_MAX
   ) {
     pixelSize = o.pixelSize as number;
   } else {

@@ -1,10 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
 
+/** Stored extent, or the fallback when the value is missing or unusable. */
+export function parsePanelSize(raw: string | null, fallback: number): number {
+  const n = raw === null ? NaN : Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+/**
+ * Largest extent the panel can take without squeezing the canvas below its
+ * minimum. The axis follows the panel's own side, and `neighbour` is the
+ * extent the other panel already claims on that same axis.
+ */
+export function panelMaxExtent(
+  bounds: { w: number; h: number },
+  side: "left" | "right" | "top" | "bottom",
+  neighbour: number,
+  canvasMin: number,
+): number {
+  const available = side === "left" || side === "right" ? bounds.w : bounds.h;
+  return Math.max(0, available - neighbour - canvasMin);
+}
+
 const read = (key: string, fallback: number): number => {
   try {
-    const raw = window.localStorage.getItem(key);
-    const n = raw === null ? NaN : Number(raw);
-    return Number.isFinite(n) && n > 0 ? n : fallback;
+    return parsePanelSize(window.localStorage.getItem(key), fallback);
   } catch {
     return fallback;
   }

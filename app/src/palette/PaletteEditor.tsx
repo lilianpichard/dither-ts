@@ -53,7 +53,7 @@ export default function PaletteEditor() {
           <button
             key={`${rgbToHex(color)}-${i}`}
             type="button"
-            aria-label={`Edit color ${rgbToHex(color)}`}
+            aria-label={t("palette.editColor", { hex: rgbToHex(color) })}
             aria-pressed={i === index}
             title={rgbToHex(color)}
             className={`size-6 rounded border ${i === index ? "border-ring ring-2" : "border-border"}`}
@@ -70,7 +70,7 @@ export default function PaletteEditor() {
       </div>
       <div className="flex items-center gap-2">
         <Label htmlFor="palette-edit" className="w-10 shrink-0 text-xs">
-          Hex
+          {t("palette.hex")}
         </Label>
         <Input
           id="palette-edit"
@@ -88,7 +88,7 @@ export default function PaletteEditor() {
             if (index >= 0) change(editColor(draft, index, editText));
           }}
         >
-          Set
+          {t("palette.set")}
         </Button>
         <Button
           size="icon"
@@ -104,7 +104,7 @@ export default function PaletteEditor() {
       </div>
       <div className="flex items-center gap-2">
         <Label htmlFor="palette-add" className="w-10 shrink-0 text-xs">
-          Add
+          {t("palette.add")}
         </Label>
         <Input
           id="palette-add"
@@ -126,7 +126,7 @@ export default function PaletteEditor() {
             setEditText(rgbToHex(next[next.length - 1]));
           }}
         >
-          <Plus /> Add
+          <Plus /> {t("palette.add")}
         </Button>
       </div>
       <Button

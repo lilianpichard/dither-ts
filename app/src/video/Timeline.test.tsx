@@ -65,6 +65,13 @@ describe("TimelineRibbon", () => {
     expect(markup).toContain("width:0%");
   });
 
+  it("disables the scrub slider while an export owns the element", () => {
+    // A scrub seeks the same video element the exporter is reading, which
+    // captures the wrong frames or resolves the other caller's seek.
+    const markup = ribbon({ disabled: true });
+    expect(markup).toContain('data-disabled=""');
+  });
+
   it("offers a scrub slider over the whole clip", () => {
     // The ribbon is the picture and the slider is the control: without one the
     // band could be looked at but not moved.

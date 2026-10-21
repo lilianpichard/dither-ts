@@ -68,7 +68,9 @@ function placeholdersIn(pattern: string): string[] {
 /** Values for every placeholder a message names, derived from the message. */
 const KNOWN: Record<string, string | number> = {
   count: 3,
+  index: 2,
   name: "Vaporwave CRT",
+  hex: "#aabbcc",
   version: "9.9.9",
   percent: 42,
   value: 7,

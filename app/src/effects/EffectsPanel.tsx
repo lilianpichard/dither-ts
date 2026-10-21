@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslate } from "../i18n";
+import type { MessageId } from "../i18n/messages";
 import { EFFECT_DEFS } from "../../../src/index.js";
 import { useApp } from "../store";
 import { Button } from "@/components/ui/button";
@@ -26,14 +27,16 @@ export default function EffectsPanel() {
   const toggleEffect = useApp((s) => s.toggleEffect);
   const setEffectParam = useApp((s) => s.setEffectParam);
   const [picked, setPicked] = useState(EFFECT_DEFS[0].type);
-  useConsoleMeta("effects", effects.length === 1 ? "1 effect" : `${effects.length} effects`);
+  const effectLabel = (type: string): string => t(`effect.${type}` as MessageId);
+  const paramLabel = (type: string, key: string): string => t(`effect.${type}.${key}` as MessageId);
+  useConsoleMeta("effects", t("effects.count", { count: effects.length }));
 
   return (
     <div className="overflow-y-auto lg:h-full">
       <div className="flex h-full flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Label htmlFor="fx-picker" className="sr-only">
-            Effect type
+            {t("effects.pick")}
           </Label>
           <Select value={picked} onValueChange={setPicked}>
             <SelectTrigger id="fx-picker" className="w-37.5">
@@ -42,18 +45,19 @@ export default function EffectsPanel() {
             <SelectContent>
               {EFFECT_DEFS.map((d) => (
                 <SelectItem key={d.type} value={d.type}>
-                  {d.label}
+                  {effectLabel(d.type)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Button onClick={() => addEffect(picked)}>{t("effects.add")}</Button>
           <span className="text-label text-muted-foreground">
-            Effect type · {EFFECT_DEFS.find((d) => d.type === picked)?.label ?? picked}
+            {t("effects.type", { name: effectLabel(picked) })}
           </span>
         </div>
         {effects.map((e, i) => {
           const def = EFFECT_DEFS.find((d) => d.type === e.type);
+          const label = effectLabel(e.type);
           return (
             <div
               key={e.key}
@@ -66,13 +70,14 @@ export default function EffectsPanel() {
                   onCheckedChange={() => toggleEffect(i)}
                 />
                 <Label htmlFor={`fx-${e.key}`} className="text-body-lg text-foreground">
-                  {def ? def.label : e.type}
+                  {label}
                 </Label>
               </div>
               {(def ? def.params : []).map((p) => (
                 <div key={p.key} className="flex min-w-30 flex-1 flex-col gap-1">
                   <Label id={`fx-${e.key}-${p.key}-label`}>
-                    {p.label} {typeof e.params[p.key] === "number" ? e.params[p.key] : p.def}
+                    {paramLabel(e.type, p.key)}{" "}
+                    {typeof e.params[p.key] === "number" ? e.params[p.key] : p.def}
                   </Label>
                   <Slider
                     aria-labelledby={`fx-${e.key}-${p.key}-label`}
@@ -88,8 +93,8 @@ export default function EffectsPanel() {
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  aria-label={t("effects.moveUp", { name: def ? def.label : e.type })}
-                  title={t("effects.moveUp", { name: def ? def.label : e.type })}
+                  aria-label={t("effects.moveUp", { name: label })}
+                  title={t("effects.moveUp", { name: label })}
                   onClick={() => moveEffect(i, -1)}
                 >
                   <ChevronUp />
@@ -97,8 +102,8 @@ export default function EffectsPanel() {
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  aria-label={t("effects.moveDown", { name: def ? def.label : e.type })}
-                  title={t("effects.moveDown", { name: def ? def.label : e.type })}
+                  aria-label={t("effects.moveDown", { name: label })}
+                  title={t("effects.moveDown", { name: label })}
                   onClick={() => moveEffect(i, 1)}
                 >
                   <ChevronDown />
@@ -106,8 +111,8 @@ export default function EffectsPanel() {
                 <Button
                   size="icon-sm"
                   variant="ghost"
-                  aria-label={t("effects.remove", { name: def ? def.label : e.type })}
-                  title={t("effects.remove", { name: def ? def.label : e.type })}
+                  aria-label={t("effects.remove", { name: label })}
+                  title={t("effects.remove", { name: label })}
                   onClick={() => removeEffect(i)}
                 >
                   <X />

@@ -22,7 +22,7 @@ const baseParams: DitherParams = {
 };
 
 function entry(overrides: Partial<HistoryEntry> = {}): HistoryEntry {
-  return { params: { ...baseParams }, operations: {}, ...overrides };
+  return { params: { ...baseParams }, operations: {}, effects: [], ...overrides };
 }
 
 describe("commitHistory", () => {
@@ -99,6 +99,37 @@ describe("commitHistory", () => {
     ]);
   });
 
+  it("records a colour-mode-only change", () => {
+    const start = entry({ params: { ...baseParams, color: true } });
+    const next = entry({ params: { ...baseParams, color: true, colorMode: "original" } });
+    const history = commitHistory(EMPTY_HISTORY, start, next);
+    expect(history.past).toHaveLength(1);
+  });
+
+  it("records effect edits and coalesces a parameter drag", () => {
+    const effect = (radius: number) => ({
+      key: "fx-1",
+      type: "blur",
+      params: { radius },
+      enabled: true,
+    });
+    let history = EMPTY_HISTORY;
+    let current = entry();
+    const added = entry({ effects: [effect(2)] });
+    history = commitHistory(history, current, added);
+    current = added;
+    expect(history.past).toHaveLength(1);
+
+    const moved = entry({ effects: [effect(4)] });
+    history = commitHistory(history, current, moved);
+    current = moved;
+    expect(history.past).toHaveLength(2);
+
+    const movedAgain = entry({ effects: [effect(6)] });
+    history = commitHistory(history, current, movedAgain);
+    expect(history.past).toHaveLength(2);
+  });
+
   it("caps the stack at the documented limit", () => {
     let history = EMPTY_HISTORY;
     let current = entry();
@@ -136,6 +167,18 @@ describe("undo and redo", () => {
     const again = redoHistory(forward.history, forward.entry!);
     expect(again.entry?.operations).toEqual({ invert: true, hue: -45 });
     expect(hasFuture(again.history)).toBe(false);
+  });
+
+  it("walks the effect stack back and forward too", () => {
+    const start = entry();
+    const withEffect = entry({
+      effects: [{ key: "fx-1", type: "blur", params: { radius: 2 }, enabled: true }],
+    });
+    const history = commitHistory(EMPTY_HISTORY, start, withEffect);
+    const step = undoHistory(history, withEffect);
+    expect(step.entry?.effects).toEqual([]);
+    const forward = redoHistory(step.history, step.entry!);
+    expect(forward.entry?.effects).toEqual(withEffect.effects);
   });
 
   it("reports a no-op at both ends of the stack", () => {

@@ -124,6 +124,7 @@ export default function PresetsPanel() {
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [thumbs, setThumbs] = useState<Map<string, string>>(new Map());
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
   const t = useTranslate();
   const importRef = useRef<HTMLInputElement>(null);
 
@@ -187,13 +188,16 @@ export default function PresetsPanel() {
     if (added === 0) {
       // A failed import is the one case that deserves a persistent block: the
       // reason is long and the user has to read it to fix the file.
-      setNotice({ ok: false, text: `Could not import ${name}: ${summarize(warnings)}` });
+      setNotice({
+        ok: false,
+        text: t("presets.importFailedNamed", { name, reason: summarize(warnings) }),
+      });
       toast.error(t("presets.importFailed"));
     } else if (warnings.length) {
       // Deduplicated and attributed, so a note says which preset it came from.
-      toast.success(`Imported ${name}`, { description: summarize(warnings) });
+      toast.success(t("presets.imported", { name }), { description: summarize(warnings) });
     } else {
-      toast.success(`Imported ${name}`);
+      toast.success(t("presets.imported", { name }));
     }
     if (importRef.current) importRef.current.value = "";
   }
@@ -206,11 +210,11 @@ export default function PresetsPanel() {
     }
     // Every bundled preset is a legacy file, so its migration notes are expected
     // housekeeping, not something to report. One line is the whole story.
-    toast.success(`Added ${added} original presets`);
+    toast.success(t("presets.added", { count: added }));
   }
 
   const sorted = [...items].sort((a, b) => Number(b.favorite) - Number(a.favorite));
-  useConsoleMeta("presets", sorted.length === 1 ? "1 saved" : `${sorted.length} saved`);
+  useConsoleMeta("presets", t("presets.savedCount", { count: sorted.length }));
 
   return (
     <TooltipProvider>
@@ -233,7 +237,7 @@ export default function PresetsPanel() {
             {t("presets.saveCurrent")}
           </Button>
           <Button variant="secondary" onClick={() => importRef.current?.click()}>
-            Import JSON
+            {t("presets.importJson")}
           </Button>
           <Button variant="secondary" onClick={onInstallCatalog}>
             {t("presets.addOriginals")}
@@ -295,10 +299,7 @@ export default function PresetsPanel() {
                   key: "rename",
                   label: t("presets.renameAction"),
                   icon: <Pencil />,
-                  onClick: () => {
-                    const next = window.prompt(t("presets.rename"), item.preset.name);
-                    if (next && next.trim()) rename(item.id, next.trim());
-                  },
+                  onClick: () => setRenaming({ id: item.id, value: item.preset.name }),
                 },
                 {
                   key: "delete",
@@ -315,10 +316,10 @@ export default function PresetsPanel() {
                   <button
                     type="button"
                     className="h-13.5 w-18 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border bg-canvas p-0 focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
-                    title={`Apply ${item.preset.name}`}
+                    title={t("presets.applyName", { name: item.preset.name })}
                     onClick={() => {
                       applyPreset(item.preset);
-                      toast.success(`Applied ${item.preset.name}`);
+                      toast.success(t("presets.applied", { name: item.preset.name }));
                     }}
                   >
                     {url ? (
@@ -335,8 +336,11 @@ export default function PresetsPanel() {
                   <div className="flex min-w-0 flex-1 flex-col">
                     <h3 className="truncate text-card-title text-foreground">{item.preset.name}</h3>
                     <p className="mt-0.5 line-clamp-2 text-label text-muted-foreground uppercase">
-                      {item.preset.params.method} · threshold {item.preset.params.threshold} · pixel{" "}
-                      {item.preset.params.pixelSize}
+                      {t("presets.summary", {
+                        method: item.preset.params.method,
+                        threshold: item.preset.params.threshold,
+                        pixelSize: item.preset.params.pixelSize,
+                      })}
                     </p>
                     <p className="mt-0.5 truncate text-label text-muted-foreground uppercase">
                       {item.favorite ? `${t("presets.favorite")} · ` : ""}
@@ -369,13 +373,45 @@ export default function PresetsPanel() {
           </div>
         )}
       </div>
+      <Dialog open={renaming !== null} onOpenChange={(open) => !open && setRenaming(null)}>
+        <DialogContent className="gap-0 p-6 sm:max-w-105">
+          <DialogHeader className="gap-0">
+            <DialogTitle>{t("presets.rename")}</DialogTitle>
+          </DialogHeader>
+          <Input
+            className="mt-4"
+            value={renaming?.value ?? ""}
+            aria-label={t("presets.name")}
+            onChange={(e) =>
+              setRenaming((current) => (current ? { ...current, value: e.target.value } : current))
+            }
+          />
+          <DialogFooter className="mx-0 mt-4 mb-0 gap-2 border-0 bg-transparent p-0">
+            <DialogClose asChild>
+              <Button variant="secondary" size="sm" className="w-20">
+                {t("common.cancel")}
+              </Button>
+            </DialogClose>
+            <Button
+              size="sm"
+              className="w-20"
+              disabled={!renaming?.value.trim()}
+              onClick={() => {
+                if (!renaming) return;
+                rename(renaming.id, renaming.value.trim());
+                setRenaming(null);
+              }}
+            >
+              {t("common.save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
         <DialogContent className="gap-0 p-6 sm:max-w-105">
           <DialogHeader className="gap-0">
             <DialogTitle>{t("presets.deleteTitle")}</DialogTitle>
-            <DialogDescription className="mt-3">
-              This removes the preset permanently.
-            </DialogDescription>
+            <DialogDescription className="mt-3">{t("presets.deleteHint")}</DialogDescription>
             <p className="mt-3 text-label text-accent-label uppercase">
               {deleting ? (items.find((i) => i.id === deleting)?.preset.name ?? "") : ""}
             </p>

@@ -68,14 +68,23 @@ describe("applying a preset", () => {
     ]);
   });
 
-  it("is undoable as a single step", () => {
+  it("is undoable as a single step, effects included", () => {
     useApp.getState().setParams({ threshold: 200 });
     useApp.getState().setOperations({ invert: true });
-    useApp.getState().setParams({ threshold: 64 }, { brightness: 0.5 });
+    useApp.getState().addEffect("blur");
+    applyPreset(
+      preset({
+        operations: { brightness: 0.5 },
+        effects: [{ type: "glow", params: { radius: 2 }, enabled: true }],
+      }),
+    );
 
     useApp.getState().undo();
     expect(useApp.getState().params.threshold).toBe(200);
     expect(useApp.getState().operations).toEqual({ invert: true });
+    expect(useApp.getState().effects).toEqual([
+      expect.objectContaining({ type: "blur", enabled: true }),
+    ]);
   });
 });
 

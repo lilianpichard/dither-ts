@@ -3,7 +3,7 @@
 // path run again. Slider and crop drags coalesce into one entry; discrete
 // toggles each get their own.
 
-import type { DitherParams } from "./store";
+import type { DitherParams, StackedEffect } from "./store";
 import { sanitizeOperations } from "./image/settings";
 import type { ImageOperations } from "./image/ops";
 import type { RGB } from "../../src/index.js";
@@ -14,6 +14,7 @@ export const HISTORY_LIMIT = 20;
 export interface HistoryEntry {
   params: DitherParams;
   operations: ImageOperations;
+  effects: StackedEffect[];
 }
 
 export interface HistoryState {
@@ -40,6 +41,7 @@ const COALESCING = new Set([
   "operations.saturation",
   "operations.hue",
   "operations.crop",
+  "effects.params",
 ]);
 
 const PARAM_KEYS = [
@@ -47,6 +49,7 @@ const PARAM_KEYS = [
   "threshold",
   "palette",
   "color",
+  "colorMode",
   "pixelSize",
 ] as const satisfies readonly (keyof DitherParams)[];
 
@@ -68,6 +71,7 @@ function clone(entry: HistoryEntry): HistoryEntry {
     // rewrite a snapshot that history still holds.
     params: { ...entry.params, palette: clonePalette(entry.params.palette) },
     operations: sanitizeOperations(entry.operations),
+    effects: entry.effects.map((effect) => ({ ...effect, params: { ...effect.params } })),
   };
 }
 
@@ -82,6 +86,14 @@ function sameValue(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function effectStructure(effects: StackedEffect[]): string {
+  return JSON.stringify(effects.map((effect) => [effect.key, effect.type, effect.enabled]));
+}
+
+function effectParams(effects: StackedEffect[]): string {
+  return JSON.stringify(effects.map((effect) => effect.params));
+}
+
 /** Paths of the fields that differ between two snapshots, in field order. */
 function changedKeys(previous: HistoryEntry, next: HistoryEntry): string[] {
   const keys: string[] = [];
@@ -93,6 +105,8 @@ function changedKeys(previous: HistoryEntry, next: HistoryEntry): string[] {
       keys.push(`operations.${key}`);
     }
   }
+  if (effectStructure(previous.effects) !== effectStructure(next.effects)) keys.push("effects");
+  if (effectParams(previous.effects) !== effectParams(next.effects)) keys.push("effects.params");
   return keys;
 }
 
