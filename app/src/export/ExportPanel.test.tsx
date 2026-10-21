@@ -129,6 +129,14 @@ describe("FormatPicker", () => {
     expect(first.endsWith(">PNG")).toBe(true);
   });
 
+  it("makes each format a pointer target with a visible hover and selected state", () => {
+    const markup = render(<FormatPicker format="svg" onFormat={() => {}} />);
+    expect(markup).toContain("cursor-pointer");
+    expect(markup).toContain("hover:bg-accent");
+    expect(markup).toContain("data-[state=on]:bg-primary");
+    expect(markup).toContain("data-[state=on]:text-primary-foreground");
+  });
+
   it("marks the format it is given, so a move is visible", () => {
     const markup = render(<FormatPicker format="svg" onFormat={() => {}} />);
     const [first] = markup.split("</button>");

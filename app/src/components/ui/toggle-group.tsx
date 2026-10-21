@@ -52,6 +52,10 @@ function ToggleGroupItem({
         "group-data-[orientation=horizontal]/toggle-group:data-[spacing=0]:first:rounded-l-lg",
         "group-data-[orientation=horizontal]/toggle-group:data-[spacing=0]:last:rounded-r-lg",
         "group-data-[orientation=horizontal]/toggle-group:data-[spacing=0]:not-first:border-l-0",
+        // The live segment needs a surface of its own: the group is a choice,
+        // and an unmarked row leaves the user guessing which one is active.
+        "data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground",
+        "data-[state=on]:hover:bg-primary/85",
         toggleVariants({ variant, size }),
         className,
       )}

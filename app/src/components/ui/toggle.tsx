@@ -6,7 +6,7 @@ import { Toggle as TogglePrimitive } from "radix-ui";
 // Sized to the app's control heights rather than shadcn's defaults: a toggle
 // next to a button has to match it, or the row reads as two different rows.
 const toggleVariants = cva(
-  "group/toggle inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-transparent whitespace-nowrap outline-none select-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3",
+  "group/toggle inline-flex shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-transparent whitespace-nowrap outline-none select-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3",
   {
     variants: {
       variant: {
