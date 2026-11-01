@@ -12,7 +12,7 @@
 <p align="center">Dither images and video. Runs entirely on your machine.</p>
 
 <p align="center">
-  <video src=".github/media/ditherts_video_1.mp4" autoplay loop muted playsinline width="720"></video>
+  <video src=".github/media/ditherts_video_1.webm" autoplay loop muted playsinline width="720"></video>
 </p>
 
 <p align="center">
@@ -63,12 +63,12 @@ npm run verify    # tests, lint, build
 ## Panels in motion
 
 <p align="center">
-  <video src=".github/media/ditherts_video_2.mp4" autoplay loop muted playsinline width="720"></video>
+  <video src=".github/media/ditherts_video_2.webm" autoplay loop muted playsinline width="720"></video>
 </p>
 <p align="center"><em>Every panel is resizable and movable; dock one on any edge of the canvas.</em></p>
 
 <p align="center">
-  <video src=".github/media/ditherts_video_3.mp4" autoplay loop muted playsinline width="720"></video>
+  <video src=".github/media/ditherts_video_3.webm" autoplay loop muted playsinline width="720"></video>
 </p>
 <p align="center"><em>Save a whole look as a preset, change everything, then click the card to get it back.</em></p>
 
