@@ -21,9 +21,9 @@
     "node": ">=22.12"
   },
   "devDependencies": {
-    "electron": "^44.7.0",
-    "electron-builder": "^26.15.3",
-    "electron-updater": "^6.8.1"
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "electron-updater": "^6.8.11"
   },
   "build": {
     "appId": "com.dither-ts.desktop",
