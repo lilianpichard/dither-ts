@@ -9,6 +9,7 @@ Three package trees, each with its own lockfile:
 
 ```sh
 npm install
+npm run hooks
 npm --prefix app install
 npm --prefix electron install
 ```

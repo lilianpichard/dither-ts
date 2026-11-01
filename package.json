@@ -77,7 +77,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepublishOnly": "npm run build",
-    "prepare": "husky"
+    "hooks": "husky"
   },
   "lint-staged": {
     "*.{js,ts,tsx,json,md,html,css}": "prettier --write",

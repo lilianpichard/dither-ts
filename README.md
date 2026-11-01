@@ -50,6 +50,7 @@ There is a browser app to try it in and a desktop app to install.
 
 ```sh
 npm install
+npm run hooks     # optional: pre-commit checks
 npm --prefix app install
 npm --prefix electron install
 
