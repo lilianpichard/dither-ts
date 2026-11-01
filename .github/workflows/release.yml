@@ -61,7 +61,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: dither-ts-${{ matrix.platform }}
-          path: electron/release/*
+          path: electron/release/*.*
           if-no-files-found: error
           retention-days: 7
 
@@ -86,9 +86,11 @@ jobs:
         run: |
           # latest*.yml is the updater feed. It has to travel with the
           # artifacts or every installed app reports itself up to date forever.
-          test -n "$(ls artifacts/latest*.yml)" || {
+          test -n "$(find artifacts -maxdepth 1 -name 'latest*.yml' -print -quit)" || {
             echo "no update feed in the artifacts"; exit 1;
           }
-          gh release create "$TAG" artifacts/* \
+          mapfile -t files < <(find artifacts -maxdepth 1 -type f -print)
+          test "${#files[@]}" -gt 0 || { echo "no release files"; exit 1; }
+          gh release create "$TAG" "${files[@]}" \
             --title "dither-ts $TAG" \
             --generate-notes
