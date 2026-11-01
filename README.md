@@ -11,9 +11,7 @@
 
 <p align="center">Dither images and video. Runs entirely on your machine.</p>
 
-<p align="center">
-  <video src=".github/media/ditherts_video_1.webm" autoplay loop muted playsinline width="720"></video>
-</p>
+[ditherts_video_1.webm](https://github.com/user-attachments/assets/9fd35c9f-91cd-449f-8358-6e45c8288135)
 
 <p align="center">
   <em>Drop a photo, watch the preview fill in with a dithered frame, switch method once
@@ -62,14 +60,12 @@ npm run verify    # tests, lint, build
 
 ## Panels in motion
 
-<p align="center">
-  <video src=".github/media/ditherts_video_2.webm" autoplay loop muted playsinline width="720"></video>
-</p>
+[ditherts_video_2.webm](https://github.com/user-attachments/assets/84c5cd12-96f4-4abc-86d4-89ca1ffbbd08)
+
 <p align="center"><em>Every panel is resizable and movable; dock one on any edge of the canvas.</em></p>
 
-<p align="center">
-  <video src=".github/media/ditherts_video_3.webm" autoplay loop muted playsinline width="720"></video>
-</p>
+[ditherts_video_3.webm](https://github.com/user-attachments/assets/1fd3f88b-90d4-4f06-a035-a6f91dd27f82)
+
 <p align="center"><em>Save a whole look as a preset, change everything, then click the card to get it back.</em></p>
 
 ## Contributing
